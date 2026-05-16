@@ -1811,31 +1811,33 @@ export default function SunFeeKalkulator() {
                     <span className="km-name">Bez magazynu energii</span>
                     <span className="km-price">—</span>
                   </label>
-                  {compatibleMagazyny.map((m) => (
+                  {compatibleMagazyny.map((m) => {
+                    const isSelected = String(magazynId) === String(m.id);
+                    return (
                     <label key={m.id}
-                      className={`kalk-magazyn-card${String(magazynId) === String(m.id) ? " selected" : ""}`}>
+                      className={`kalk-magazyn-card${isSelected ? " selected" : ""}`}>
                       <input type="radio" name="magazynId" value={m.id}
-                        checked={String(magazynId) === String(m.id)}
+                        checked={isSelected}
                         onChange={() => setMagazynId(m.id)} />
                       <span className="km-name">{m.name}</span>
                       <span className="km-specs">{m.capacityKwh} kWh · {m.powerKw} kW</span>
                       {m.wagaKg != null && (
                         <span className="km-weight">{m.wagaKg} kg</span>
                       )}
-                      {showAllPrices && (
+                      {showAllPrices && !isSelected && (
                         <span className="km-price">
-                          od {fmt(normalizePriceTiers(m)[0] ?? m.priceNetto)} zł / szt.
+                          od {fmt(normalizePriceTiers(m)[0] ?? m.priceNetto)} zł
                         </span>
                       )}
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {magazynId !== "none" && magazynLine && showAllPrices && (
                   <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 16 }}>
-                    <strong>Cennik progowy ({magazynLine.quantity} szt.)</strong>
+                    <strong>Koszt magazynu ({magazynLine.quantity} szt.)</strong>
                     <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.55 }}>
-                      {formatTierBreakdown(magazynLine.unitPrices, fmt)} zł ={" "}
                       <strong>{fmt(magazynLine.totalPrice)} zł netto</strong>
                     </p>
                   </div>

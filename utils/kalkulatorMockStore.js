@@ -7,6 +7,7 @@ const KEYS = {
   wyceny: "k2_wyceny",
   counters: "k2_counters",
   seeded: "k2_seeded",
+  magazynTiersMigrated: "k2_magazyny_tiers_v1",
 };
 
 function read(key, fallback) {
@@ -119,6 +120,49 @@ export function ensureSeeded() {
   write(KEYS.seeded, true);
 }
 
+/** Uzupełnia priceTiers w istniejącym localStorage (stary katalog miał tylko priceNetto). */
+function migrateMagazynPriceTiers() {
+  if (typeof window === "undefined") return;
+  if (read(KEYS.magazynTiersMigrated, false)) return;
+
+  const falowniki = read(KEYS.falowniki, SEED_FALOWNIKI);
+  const seedById = Object.fromEntries(seedMagazyny(falowniki).map((m) => [m.id, m]));
+  let list = read(KEYS.magazyny, []);
+  let changed = false;
+
+  list = list.map((m) => {
+    const existing = Array.isArray(m.priceTiers)
+      ? m.priceTiers.map(Number).filter((n) => n > 0)
+      : [];
+    if (existing.length > 1) return m;
+
+    const seedItem = seedById[m.id];
+    if (seedItem?.priceTiers?.length > 1) {
+      changed = true;
+      return {
+        ...m,
+        name: seedItem.name ?? m.name,
+        capacityKwh: m.capacityKwh ?? seedItem.capacityKwh,
+        powerKw: m.powerKw ?? seedItem.powerKw,
+        wagaKg: m.wagaKg ?? seedItem.wagaKg,
+        priceTiers: seedItem.priceTiers,
+        priceNetto: seedItem.priceTiers[0],
+      };
+    }
+
+    if (existing.length === 1) return m;
+
+    const single = Number(m.priceNetto);
+    if (Number.isFinite(single) && single > 0) {
+      return { ...m, priceTiers: [single], priceNetto: single };
+    }
+    return m;
+  });
+
+  if (changed) write(KEYS.magazyny, list);
+  write(KEYS.magazynTiersMigrated, true);
+}
+
 function attachFalownikiToMagazyn(magazyn, falownikiIds, allFalowniki) {
   const ids = Array.isArray(falownikiIds) ? falownikiIds : [];
   const falowniki = ids
@@ -216,6 +260,7 @@ export const mockStore = {
 
   getMagazyny(onlyActive) {
     ensureSeeded();
+    migrateMagazynPriceTiers();
     let list = read(KEYS.magazyny, []);
     list = list.map((m) => {
       const tiers = Array.isArray(m.priceTiers) && m.priceTiers.length

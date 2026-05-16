@@ -32,6 +32,19 @@ export function calcTieredTotal(magazyn, quantity) {
   return getTierUnitPrices(magazyn, quantity).reduce((s, p) => s + p, 0);
 }
 
+/** Lista pozycji cennika do UI: „1. bateria — 3 000 zł”. */
+export function formatTierCatalogLines(magazyn, fmt, maxLines = 12) {
+  const tiers = normalizePriceTiers(magazyn);
+  const limit = Math.min(tiers.length, maxLines);
+  return tiers.slice(0, limit).map((price, index) => ({
+    position: index + 1,
+    price,
+    label: fmt
+      ? `${index + 1}. bateria — ${fmt(price)} zł`
+      : `${index + 1}. bateria — ${price} zł`,
+  }));
+}
+
 export function formatTierBreakdown(unitPrices, fmt) {
   if (!unitPrices.length) return "";
   if (typeof fmt !== "function") {

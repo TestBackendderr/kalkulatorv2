@@ -22,7 +22,7 @@ const EMPTY_MAGAZYN  = {
   capacityKwh: "",
   powerKw: "",
   wagaKg: "",
-  priceTiers: ["3000"],
+  priceTiers: ["3000", "2950", "2940", "2930"],
   falownikiIds: [],
   isActive: true,
 };
