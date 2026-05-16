@@ -1,33 +1,94 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "react-toastify";
-import {
-  createUser,
-  searchUsers,
-  getRoleLabel,
-} from "@/utils/usersMockStore";
+import api from "@/utils/axiosInstance";
+
+const ROLE_LABELS = {
+  Administrator: "Administrator",
+  Handlowiec: "Dział Handlowy",
+};
+
+function getRoleLabel(role) {
+  return ROLE_LABELS[role] || role || "—";
+}
+
+function extractListFromResponse(payload) {
+  if (Array.isArray(payload)) return { items: payload, total: payload.length };
+  if (Array.isArray(payload?.data)) {
+    return {
+      items: payload.data,
+      total: payload.meta?.total ?? payload.total ?? payload.data.length,
+    };
+  }
+  if (Array.isArray(payload?.items)) {
+    return {
+      items: payload.items,
+      total: payload.total ?? payload.items.length,
+    };
+  }
+  return { items: [], total: 0 };
+}
+
+function extractApiError(err, fallback) {
+  const msg = err?.response?.data?.message;
+  if (Array.isArray(msg)) return msg.join(", ");
+  if (typeof msg === "string" && msg.trim()) return msg;
+  return fallback;
+}
 
 const EMPTY_FORM = {
   imie: "",
   nazwisko: "",
   email: "",
   haslo: "",
-  role: "Handlowiec",
+  rola: "Handlowiec",
 };
+
+const SEARCH_DEBOUNCE_MS = 350;
 
 export default function UzytkownicyPanel() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState([]);
-  const [tick, setTick] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
 
-  const reload = () => setTick((t) => t + 1);
+  const debounceRef = useRef(null);
+
+  const load = useCallback(async (szukaj) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("strona", "1");
+      params.set("naStronie", "100");
+      const trimmed = (szukaj || "").trim();
+      if (trimmed) params.set("szukaj", trimmed);
+
+      const res = await api.get(`/users?${params.toString()}`);
+      const { items } = extractListFromResponse(res.data);
+      setUsers(items);
+    } catch (err) {
+      toast.error(extractApiError(err, "Nie udało się pobrać użytkowników"));
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    setUsers(searchUsers(search));
-  }, [search, tick]);
+    load("");
+  }, [load]);
 
-  const totalCount = useMemo(() => searchUsers("").length, [tick]);
+  const triggerSearch = (value) => {
+    setSearch(value);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      load(value);
+    }, SEARCH_DEBOUNCE_MS);
+  };
+
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -54,33 +115,71 @@ export default function UzytkownicyPanel() {
       toast.warn("Hasło jest wymagane");
       return false;
     }
-    if (form.haslo.length < 4) {
-      toast.warn("Hasło musi mieć co najmniej 4 znaki");
+    if (form.haslo.length < 8) {
+      toast.warn("Hasło musi mieć co najmniej 8 znaków");
       return false;
     }
     return true;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
     setSaving(true);
     try {
-      createUser({
-        imie: form.imie,
-        nazwisko: form.nazwisko,
-        email: form.email,
+      await api.post("/users", {
+        imie: form.imie.trim(),
+        nazwisko: form.nazwisko.trim(),
+        email: form.email.trim(),
         haslo: form.haslo,
-        role: form.role,
+        rola: form.rola,
       });
       toast.success("Użytkownik utworzony");
       setForm(EMPTY_FORM);
-      reload();
+      load(search);
     } catch (err) {
-      toast.error(err.message || "Błąd tworzenia użytkownika");
+      toast.error(extractApiError(err, "Błąd tworzenia użytkownika"));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const isUserBlocked = (u) =>
+    u?.zablokowany === true || u?.isBlocked === true;
+
+  const handleToggleBlock = async (u) => {
+    setBusyId(u.id);
+    try {
+      await api.patch(`/users/${u.id}/blokada`);
+      toast.success(
+        isUserBlocked(u) ? "Użytkownik odblokowany" : "Użytkownik zablokowany",
+      );
+      load(search);
+    } catch (err) {
+      toast.error(extractApiError(err, "Nie udało się zmienić statusu"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (u) => {
+    if (
+      !window.confirm(
+        `Usunąć użytkownika ${u.imie || ""} ${u.nazwisko || ""}? Operacja jest nieodwracalna.`,
+      )
+    ) {
+      return;
+    }
+    setBusyId(u.id);
+    try {
+      await api.delete(`/users/${u.id}`);
+      toast.success("Użytkownik usunięty");
+      load(search);
+    } catch (err) {
+      toast.error(extractApiError(err, "Nie udało się usunąć użytkownika"));
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -89,7 +188,9 @@ export default function UzytkownicyPanel() {
       <div className="uz-header">
         <div>
           <h1 className="uz-title">Użytkownicy</h1>
-          <p className="uz-subtitle">Zarządzanie kontami Handlowiec i Administrator</p>
+          <p className="uz-subtitle">
+            Zarządzanie kontami Handlowiec i Administrator
+          </p>
         </div>
       </div>
 
@@ -105,6 +206,7 @@ export default function UzytkownicyPanel() {
                 value={form.imie}
                 onChange={handleChange("imie")}
                 placeholder="np. Jan"
+                disabled={saving}
               />
             </div>
             <div className="uz-field">
@@ -115,6 +217,7 @@ export default function UzytkownicyPanel() {
                 value={form.nazwisko}
                 onChange={handleChange("nazwisko")}
                 placeholder="np. Kowalski"
+                disabled={saving}
               />
             </div>
             <div className="uz-field">
@@ -125,6 +228,7 @@ export default function UzytkownicyPanel() {
                 value={form.email}
                 onChange={handleChange("email")}
                 placeholder="np. jan@sunfee.pl"
+                disabled={saving}
               />
             </div>
             <div className="uz-field">
@@ -134,19 +238,29 @@ export default function UzytkownicyPanel() {
                 type="password"
                 value={form.haslo}
                 onChange={handleChange("haslo")}
-                placeholder="min. 4 znaki"
+                placeholder="min. 8 znaków"
+                disabled={saving}
               />
             </div>
             <div className="uz-field">
               <label htmlFor="uz-rola">Rola *</label>
-              <select id="uz-rola" value={form.role} onChange={handleChange("role")}>
+              <select
+                id="uz-rola"
+                value={form.rola}
+                onChange={handleChange("rola")}
+                disabled={saving}
+              >
                 <option value="Handlowiec">Handlowiec</option>
                 <option value="Administrator">Administrator</option>
               </select>
             </div>
           </div>
           <div className="uz-form-actions">
-            <button type="submit" className="uz-btn uz-btn--primary" disabled={saving}>
+            <button
+              type="submit"
+              className="uz-btn uz-btn--primary"
+              disabled={saving}
+            >
               {saving ? "Zapisywanie…" : "Utwórz użytkownika"}
             </button>
           </div>
@@ -156,21 +270,24 @@ export default function UzytkownicyPanel() {
       <section className="uz-card uz-card--list">
         <div className="uz-list-header">
           <h2 className="uz-card-title">
-            Lista użytkowników ({users.length}
-            {search ? ` / ${totalCount}` : ""})
+            Lista użytkowników ({users.length})
           </h2>
           <input
             className="uz-search"
             type="search"
-            placeholder="Szukaj (imię, nazwisko, email, rola)…"
+            placeholder="Szukaj (imię, nazwisko, email)…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => triggerSearch(e.target.value)}
           />
         </div>
 
-        {users.length === 0 ? (
+        {loading ? (
+          <p className="uz-empty">Ładowanie…</p>
+        ) : users.length === 0 ? (
           <p className="uz-empty">
-            {search ? "Brak użytkowników pasujących do wyszukiwania." : "Brak użytkowników."}
+            {search
+              ? "Brak użytkowników pasujących do wyszukiwania."
+              : "Brak użytkowników."}
           </p>
         ) : (
           <div className="uz-table-wrap">
@@ -181,35 +298,74 @@ export default function UzytkownicyPanel() {
                   <th>Nazwisko</th>
                   <th>Email</th>
                   <th>Rola</th>
+                  <th>Status</th>
                   <th>Utworzono</th>
+                  <th>Akcje</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td>{u.imie}</td>
-                    <td>{u.nazwisko}</td>
-                    <td>{u.email}</td>
-                    <td>
-                      <span
-                        className={`uz-role uz-role--${
-                          u.role === "Administrator" ? "admin" : "handl"
-                        }`}
-                      >
-                        {getRoleLabel(u.role)}
-                      </span>
-                    </td>
-                    <td className="uz-td-date">
-                      {new Date(u.createdAt).toLocaleString("pl-PL", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                  </tr>
-                ))}
+                {users.map((u) => {
+                  const isBlocked = isUserBlocked(u);
+                  const created =
+                    u.createdAt || u.utworzonyAt || u.created_at || null;
+                  return (
+                    <tr key={u.id}>
+                      <td>{u.imie}</td>
+                      <td>{u.nazwisko}</td>
+                      <td>{u.email}</td>
+                      <td>
+                        <span
+                          className={`uz-role uz-role--${
+                            u.rola === "Administrator" ? "admin" : "handl"
+                          }`}
+                        >
+                          {getRoleLabel(u.rola)}
+                        </span>
+                      </td>
+                      <td>
+                        {isBlocked ? (
+                          <span className="uz-role uz-role--handl">
+                            Zablokowany
+                          </span>
+                        ) : (
+                          <span className="uz-role uz-role--admin">
+                            Aktywny
+                          </span>
+                        )}
+                      </td>
+                      <td className="uz-td-date">
+                        {created
+                          ? new Date(created).toLocaleString("pl-PL", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "—"}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="uz-btn uz-btn--primary"
+                          style={{ marginRight: 8 }}
+                          disabled={busyId === u.id}
+                          onClick={() => handleToggleBlock(u)}
+                        >
+                          {isBlocked ? "Odblokuj" : "Zablokuj"}
+                        </button>
+                        <button
+                          type="button"
+                          className="uz-btn"
+                          disabled={busyId === u.id}
+                          onClick={() => handleDelete(u)}
+                        >
+                          Usuń
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

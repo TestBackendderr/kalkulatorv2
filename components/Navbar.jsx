@@ -5,6 +5,8 @@ import { useAuth } from "@/context/AuthContext";
 import Leftside from "./Leftside";
 
 const getRoleDisplayName = (role) => {
+  if (!role) return "";
+
   const roleMap = {
     Administrator: "Administrator",
     Handlowiec: "Dział Handlowy",
@@ -19,7 +21,7 @@ const getRoleDisplayName = (role) => {
 
   return (
     roleMap[role] ||
-    role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    String(role).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   );
 };
 
@@ -47,7 +49,7 @@ const Navbar = () => {
         </div>
 
         <p className="navbar-user">
-          {user ? getRoleDisplayName(user.role) : "Nie zalogowano"}
+          {user ? getRoleDisplayName(user.role ?? user.rola) : "Nie zalogowano"}
         </p>
 
         <div className="navbar-actions">

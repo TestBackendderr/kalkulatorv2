@@ -2,12 +2,27 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import LoginForm from "@/components/forms/LoginForm";
 import { useAuth } from "@/context/AuthContext";
-import { authenticateUser } from "@/utils/usersMockStore";
+
+function extractServerError(err) {
+  const status = err?.response?.status;
+  const msg = err?.response?.data?.message;
+
+  if (status === 401) return "Nieprawidłowy email lub hasło.";
+  if (status === 403) return "Konto zostało zablokowane.";
+  if (Array.isArray(msg)) return msg.join(", ");
+  if (typeof msg === "string" && msg.trim()) return msg;
+
+  if (err?.code === "ERR_NETWORK" || err?.message === "Network Error") {
+    return "Brak połączenia z serwerem (http://localhost:3000).";
+  }
+  return "Nie udało się zalogować. Spróbuj ponownie.";
+}
 
 export default function LoginPage() {
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
-  const { user, loading, setUser } = useAuth();
+  const { user, loading, login } = useAuth();
 
   useEffect(() => {
     if (!loading && user) {
@@ -15,20 +30,22 @@ export default function LoginPage() {
     }
   }, [user, loading, router]);
 
-  const handleLogin = (email, password) => {
+  const handleLogin = async (email, password) => {
     if (!email?.trim() || !password?.trim()) {
       setError("Wprowadź email i hasło.");
       return;
     }
 
-    const session = authenticateUser(email, password);
-    if (!session) {
-      setError("Nieprawidłowy email lub hasło.");
-      return;
+    setError("");
+    setSubmitting(true);
+    try {
+      await login(email.trim(), password);
+      router.push("/kalkulator");
+    } catch (err) {
+      setError(extractServerError(err));
+    } finally {
+      setSubmitting(false);
     }
-
-    setUser(session);
-    router.push("/kalkulator");
   };
 
   if (loading) {
@@ -39,11 +56,12 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-container">
         <h2>Logowanie — Kalkulator v2</h2>
-        <p style={{ fontSize: 13, color: "#64748b", textAlign: "center", marginBottom: 16 }}>
-          Demo: admin@sunfee.pl / admin · handlowiec@sunfee.pl / handlowiec
-        </p>
         <div className="login-form">
-          <LoginForm onSubmit={handleLogin} error={error} />
+          <LoginForm
+            onSubmit={handleLogin}
+            error={error}
+            submitting={submitting}
+          />
         </div>
       </div>
     </div>

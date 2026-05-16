@@ -1,11 +1,12 @@
 import { useState } from "react";
 
-const LoginForm = ({ onSubmit, error }) => {
+const LoginForm = ({ onSubmit, error, submitting = false }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (submitting) return;
     onSubmit(email, password);
   };
 
@@ -21,6 +22,8 @@ const LoginForm = ({ onSubmit, error }) => {
           onChange={(e) => setEmail(e.target.value)}
           required
           placeholder="Wprowadź email"
+          autoComplete="email"
+          disabled={submitting}
         />
       </div>
       <div className="form-group">
@@ -32,10 +35,12 @@ const LoginForm = ({ onSubmit, error }) => {
           onChange={(e) => setPassword(e.target.value)}
           required
           placeholder="Wprowadź hasło"
+          autoComplete="current-password"
+          disabled={submitting}
         />
       </div>
-      <button type="submit" className="login-btn">
-        Zaloguj się
+      <button type="submit" className="login-btn" disabled={submitting}>
+        {submitting ? "Logowanie…" : "Zaloguj się"}
       </button>
     </form>
   );
