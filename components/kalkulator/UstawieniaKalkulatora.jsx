@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
+import { normalizePriceTiers } from "@/utils/magazynPricing";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -15,7 +16,16 @@ const TABS = [
 const EMPTY_FALOWNIK = { name: "", powerKw: "", priceNetto: "", isActive: true };
 const EMPTY_PANEL    = { name: "", powerW: "",  priceNetto: "", isActive: true };
 const EMPTY_KLIMATYZATOR = { name: "", priceNetto: "", isActive: true };
-const EMPTY_MAGAZYN  = { name: "", compatibility: "", capacityKwh: "", powerKw: "", wagaKg: "", priceNetto: "", falownikiIds: [], isActive: true };
+const EMPTY_MAGAZYN  = {
+  name: "",
+  compatibility: "",
+  capacityKwh: "",
+  powerKw: "",
+  wagaKg: "",
+  priceTiers: ["3000"],
+  falownikiIds: [],
+  isActive: true,
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -546,11 +556,35 @@ function MagazynyTab() {
       capacityKwh:   item.capacityKwh,
       powerKw:       item.powerKw,
       wagaKg:        item.wagaKg != null ? String(item.wagaKg) : "",
-      priceNetto:    item.priceNetto,
+      priceTiers:    normalizePriceTiers(item).map(String),
       falownikiIds:  (item.falowniki || []).map((f) => f.id),
       isActive:      item.isActive,
     });
     setModal({ mode: "edit", id: item.id });
+  };
+
+  const setTierPrice = (index, value) => {
+    setForm((prev) => {
+      const tiers = [...(prev.priceTiers || [])];
+      tiers[index] = value;
+      return { ...prev, priceTiers: tiers };
+    });
+  };
+
+  const addTier = () => {
+    setForm((prev) => {
+      const tiers = [...(prev.priceTiers || [])];
+      const last = tiers.length ? tiers[tiers.length - 1] : "";
+      tiers.push(last);
+      return { ...prev, priceTiers: tiers };
+    });
+  };
+
+  const removeTier = (index) => {
+    setForm((prev) => {
+      const tiers = (prev.priceTiers || []).filter((_, i) => i !== index);
+      return { ...prev, priceTiers: tiers.length ? tiers : [""] };
+    });
   };
 
   const closeModal = () => setModal(null);
@@ -567,7 +601,8 @@ function MagazynyTab() {
   const validate = () => {
     if (!form.name.trim())          { toast.warn("Nazwa jest wymagana"); return false; }
     if (!form.compatibility.trim()) { toast.warn("Kompatybilność jest wymagana"); return false; }
-    if (!form.priceNetto || +form.priceNetto <= 0) { toast.warn("Cena musi być większa od 0"); return false; }
+    const tiers = (form.priceTiers || []).map((p) => +p).filter((n) => n > 0);
+    if (!tiers.length) { toast.warn("Podaj co najmniej jedną cenę w cenniku progowym"); return false; }
     if (form.wagaKg !== "" && Number(form.wagaKg) < 0) { toast.warn("Waga nie może być ujemna"); return false; }
     return true;
   };
@@ -576,13 +611,15 @@ function MagazynyTab() {
     if (!validate()) return;
     setSaving(true);
     try {
+      const tiers = (form.priceTiers || []).map((p) => +p).filter((n) => n > 0);
       const payload = {
         name:          form.name.trim(),
         compatibility: form.compatibility.trim(),
         capacityKwh:   form.capacityKwh !== "" ? +form.capacityKwh : undefined,
         powerKw:       form.powerKw     !== "" ? +form.powerKw     : undefined,
         wagaKg:        form.wagaKg === "" ? null : +form.wagaKg,
-        priceNetto:    +form.priceNetto,
+        priceTiers:    tiers,
+        priceNetto:    tiers[0],
         falownikiIds:  form.falownikiIds,
         isActive:      form.isActive,
       };
@@ -631,7 +668,7 @@ function MagazynyTab() {
                 <th>Pojemność (kWh)</th>
                 <th>Moc (kW)</th>
                 <th>Waga (kg)</th>
-                <th>Cena netto (zł)</th>
+                <th>Cennik progowy (zł)</th>
                 <th>Kompatybilność</th>
                 <th>Falowniki</th>
                 <th>Status</th>
@@ -648,7 +685,14 @@ function MagazynyTab() {
                   <td>{item.capacityKwh ?? "—"}</td>
                   <td>{item.powerKw ?? "—"}</td>
                   <td>{item.wagaKg != null ? `${item.wagaKg} kg` : "—"}</td>
-                  <td>{fmt(item.priceNetto)} zł</td>
+                  <td>
+                    {normalizePriceTiers(item).slice(0, 4).map((p, i) => (
+                      <span key={i} className="usk-chip" style={{ marginRight: 4 }}>
+                        {i + 1}.: {fmt(p)}
+                      </span>
+                    ))}
+                    {normalizePriceTiers(item).length > 4 && "…"}
+                  </td>
                   <td>{item.compatibility}</td>
                   <td>
                     <div className="usk-chips">
@@ -709,8 +753,38 @@ function MagazynyTab() {
               />
               <p className="usk-hint">Używana w kalkulatorze przy ostrzeżeniu o transporcie i montażu.</p>
 
-              <label className="usk-label">Cena netto (zł) *</label>
-              <input className="usk-input" type="number" min="1" step="1" value={form.priceNetto} onChange={(e) => setForm({ ...form, priceNetto: e.target.value })} placeholder="np. 4000" />
+              <label className="usk-label">Cennik progowy (zł netto) *</label>
+              <p className="usk-hint" style={{ marginTop: 0 }}>
+                Cena za 1., 2., 3. … baterię. Przy większej ilości ostatnia zdefiniowana cena powtarza się.
+              </p>
+              {(form.priceTiers || []).map((tier, index) => (
+                <div key={index} className="usk-form-row" style={{ alignItems: "center", marginBottom: 8 }}>
+                  <span className="usk-label" style={{ minWidth: 100, marginBottom: 0 }}>
+                    {index + 1}. bateria
+                  </span>
+                  <input
+                    className="usk-input"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={tier}
+                    onChange={(e) => setTierPrice(index, e.target.value)}
+                    placeholder="np. 3000"
+                  />
+                  {(form.priceTiers || []).length > 1 && (
+                    <button
+                      type="button"
+                      className="usk-btn usk-btn--sm usk-btn--danger-outline"
+                      onClick={() => removeTier(index)}
+                    >
+                      Usuń
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button type="button" className="usk-btn usk-btn--sm" style={{ marginBottom: 16 }} onClick={addTier}>
+                + Kolejna pozycja cennika
+              </button>
 
               <label className="usk-label">Kompatybilne falowniki</label>
               {falowniki.length === 0 ? (

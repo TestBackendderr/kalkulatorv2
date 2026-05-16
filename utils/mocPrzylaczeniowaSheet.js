@@ -50,7 +50,11 @@ export function computeEffectivePower({
       : Number(falownikData?.powerKw) || 0;
 
   const meSzt = magazynData ? Math.max(1, parseInt(String(magazynIlosc ?? 1), 10) || 1) : 0;
-  const c8 = magazynData && meSzt > 0 ? (Number(magazynData.powerKw) || 0) * meSzt : 0;
+  const unitMeKw =
+    Number(magazynData?.unitPowerKw ?? magazynData?.mocJednostkowaKw) ||
+    Number(magazynData?.powerKw) ||
+    0;
+  const c8 = magazynData && meSzt > 0 ? unitMeKw * meSzt : 0;
 
   return { ...calcEffectivePower(a8, b8, c8), a8, b8, c8, newPanelsKwp, pvKwp };
 }

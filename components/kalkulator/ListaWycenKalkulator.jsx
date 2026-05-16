@@ -124,8 +124,12 @@ function DetailModal({ id, onClose }) {
             <table className="lwk-detail-table"><tbody>
               {d?.magazynEnergii ? <>
                 <tr><td>Model</td><td>{d.magazynEnergii.nazwa}</td></tr>
-                <tr><td>Pojemność</td><td>{d.magazynEnergii.pojemnoscKwh} kWh</td></tr>
-                <tr><td>Moc</td><td>{d.magazynEnergii.mocKw} kW</td></tr>
+                <tr><td>Ilość</td><td>{d.magazynEnergii.ilosc ?? 1} szt.</td></tr>
+                <tr><td>Pojemność łącznie</td><td>{d.magazynEnergii.pojemnoscKwh} kWh</td></tr>
+                <tr><td>Moc łącznie</td><td>{d.magazynEnergii.mocKw} kW</td></tr>
+                {Array.isArray(d.magazynEnergii.cenyPozycji) && d.magazynEnergii.cenyPozycji.length > 1 && (
+                  <tr><td>Cennik</td><td>{d.magazynEnergii.cenyPozycji.join(" + ")} zł</td></tr>
+                )}
               </> : <tr><td colSpan={2}>Brak magazynu energii</td></tr>}
             </tbody></table>
 

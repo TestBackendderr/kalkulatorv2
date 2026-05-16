@@ -73,12 +73,13 @@ function seedMagazyny(falowniki) {
   return [
     {
       id: 1,
-      name: "Deye SE-G5.1 Pro",
+      name: "DEYE SG-G5 Pro-B",
       compatibility: "Deye",
       capacityKwh: 5.12,
       powerKw: 2.56,
       wagaKg: 52,
-      priceNetto: 12000,
+      priceTiers: [3000, 2950, 2940, 2930, 2920, 2910, 2900, 2890],
+      priceNetto: 3000,
       falowniki: f1 ? [{ id: f1.id, name: f1.name }] : [],
       isActive: true,
     },
@@ -89,6 +90,7 @@ function seedMagazyny(falowniki) {
       capacityKwh: 10.24,
       powerKw: 5.12,
       wagaKg: 98,
+      priceTiers: [22000, 21500, 21000, 20500],
       priceNetto: 22000,
       falowniki: [f1, f2].filter(Boolean).map((f) => ({ id: f.id, name: f.name })),
       isActive: true,
@@ -215,6 +217,14 @@ export const mockStore = {
   getMagazyny(onlyActive) {
     ensureSeeded();
     let list = read(KEYS.magazyny, []);
+    list = list.map((m) => {
+      const tiers = Array.isArray(m.priceTiers) && m.priceTiers.length
+        ? m.priceTiers.map(Number).filter((n) => n > 0)
+        : Number(m.priceNetto) > 0
+          ? [Number(m.priceNetto)]
+          : [];
+      return { ...m, priceTiers: tiers, priceNetto: tiers[0] ?? m.priceNetto };
+    });
     if (onlyActive) list = list.filter((m) => m.isActive !== false);
     return list;
   },

@@ -120,7 +120,10 @@ export function buildPdfContextFromSavedRecord(record, showAllPrices) {
         name: d.magazynEnergii.nazwa,
         capacityKwh: d.magazynEnergii.pojemnoscKwh,
         powerKw: d.magazynEnergii.mocKw,
+        unitCapacityKwh: d.magazynEnergii.pojemnoscJednostkowaKwh,
+        unitPowerKw: d.magazynEnergii.mocJednostkowaKw,
         priceNetto: d.magazynEnergii.cenaNetto,
+        unitPrices: d.magazynEnergii.cenyPozycji,
         ilosc: d.magazynEnergii.ilosc ?? 1,
         jednostka: d.magazynEnergii.jednostka ?? "szt.",
       }
@@ -440,11 +443,18 @@ export async function renderKalkulatorWycenaPdfAndSave(ctx) {
   let krokN = 4;
   if (magazynData) {
     krokHd(`Krok ${krokN++}: Magazyn Energii`);
-    krokLine(`${magazynData.name} x${magazynData.ilosc ?? 1}`);
-    krokLine(`Ilość: ${magazynData.ilosc ?? 1} szt.`);
+    krokLine(`${magazynData.name} × ${magazynData.ilosc ?? 1} szt.`);
     if (magazynData.capacityKwh != null && magazynData.powerKw != null)
-      krokLine(`Pojemność: ${magazynData.capacityKwh} kWh  Moc: ${magazynData.powerKw} kW`);
-    if (showAllPrices && magazynData.priceNetto) krokLine(`${fmtPdf(magazynData.priceNetto)} zł`);
+      krokLine(`Razem: ${magazynData.capacityKwh} kWh · ${magazynData.powerKw} kW`);
+    if (showAllPrices && magazynData.priceNetto) {
+      if (Array.isArray(magazynData.unitPrices) && magazynData.unitPrices.length > 1) {
+        krokLine(
+          `${magazynData.unitPrices.map((p) => fmtPdf(p)).join(" + ")} zł = ${fmtPdf(magazynData.priceNetto)} zł netto`,
+        );
+      } else {
+        krokLine(`${fmtPdf(magazynData.priceNetto)} zł netto`);
+      }
+    }
     y += 2;
   }
 
@@ -987,7 +997,10 @@ export function buildPdfContextFromLiveCalculator({
           name: magazynData.name,
           capacityKwh: magazynData.capacityKwh,
           powerKw: magazynData.powerKw,
+          unitCapacityKwh: magazynData.unitCapacityKwh,
+          unitPowerKw: magazynData.unitPowerKw,
           priceNetto: magazynData.priceNetto ?? magazynData.price,
+          unitPrices: magazynData.unitPrices,
           ilosc: magazynData.ilosc ?? 1,
           jednostka: magazynData.jednostka ?? "szt.",
         }

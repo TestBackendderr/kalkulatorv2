@@ -8,6 +8,7 @@ import {
   renderKalkulatorWycenaPdfAndSave,
 } from "@/utils/kalkulatorWycenaPdf";
 import { computeEffectivePower } from "@/utils/mocPrzylaczeniowaSheet";
+import { computeMagazynLine, formatTierBreakdown, normalizePriceTiers } from "@/utils/magazynPricing";
 
 const CONSTRUCTION = { grunt: 450, dach: 350 };
 
@@ -333,8 +334,16 @@ export default function SunFeeKalkulator() {
   const magazynData = useMemo(() => {
     if (magazynId === "none") return null;
     const found = magazynyList.find((m) => String(m.id) === String(magazynId));
-    return found ? { ...found, price: found.priceNetto } : null;
+    if (!found) return null;
+    const tiers = normalizePriceTiers(found);
+    return { ...found, priceTiers: tiers, price: tiers[0] ?? found.priceNetto };
   }, [magazynId, magazynyList]);
+
+  const magazynLine = useMemo(() => {
+    if (!magazynData) return null;
+    const qty = Math.max(1, parseInt(String(magazynIlosc), 10) || 1);
+    return computeMagazynLine(magazynData, qty);
+  }, [magazynData, magazynIlosc]);
 
   useEffect(() => {
     if (magazynId === "none") setMagazynIlosc("1");
@@ -407,14 +416,17 @@ export default function SunFeeKalkulator() {
       add(falLabel, falLineTotal);
     }
 
-    // Energy storage
-    const meSzt = magazynData ? Math.max(1, parseInt(String(magazynIlosc), 10) || 1) : 0;
-    if (magazynData && meSzt > 0) {
+    // Energy storage (cennik progowy: 1. + 2. + 3. bateria…)
+    const meSzt = magazynLine?.quantity ?? 0;
+    if (magazynData && magazynLine && meSzt > 0) {
+      const breakdown = formatTierBreakdown(magazynLine.unitPrices, fmt);
       const meLabel =
         meSzt > 1
-          ? `Magazyn energii – ${magazynData.name} (${meSzt} szt.)`
+          ? `Magazyn energii – ${magazynData.name} (${meSzt} szt., ${magazynLine.totalCapacityKwh} kWh / ${magazynLine.totalPowerKw} kW)`
           : `Magazyn energii – ${magazynData.name}`;
-      add(meLabel, magazynData.price * meSzt);
+      const priceNote =
+        meSzt > 1 && breakdown ? ` (${breakdown} zł)` : "";
+      add(`${meLabel}${priceNote}`, magazynLine.totalPrice);
       add(
         meSzt > 1 ? `Montaż magazynu energii (${meSzt} szt.)` : "Montaż magazynu energii",
         FIXED.montazME * meSzt
@@ -486,7 +498,7 @@ export default function SunFeeKalkulator() {
     existingPvKwp, connectionKw, wm,
     panelOption, panelData, panelCount, mountType, panelSource,
     falownikAction, falownikData, falownikMocPaneliKw, falownikSource, falownikIlosc,
-    magazynData, magazynIlosc,
+    magazynData, magazynIlosc, magazynLine,
     rozdzielnica,
     przekop, przekopMetry,
     klimatyzatorMontaz, selectedKlimatyzatorIds, klimatyzatoryList,
@@ -753,14 +765,17 @@ export default function SunFeeKalkulator() {
               }
             : null,
         },
-        magazynEnergii: magazynData
+        magazynEnergii: magazynData && magazynLine
           ? {
               id: magazynData.id,
               nazwa: magazynData.name,
-              pojemnoscKwh: magazynData.capacityKwh,
-              mocKw: magazynData.powerKw,
-              cenaNetto: magazynData.price,
-              ilosc: Math.max(1, parseInt(String(magazynIlosc), 10) || 1),
+              pojemnoscJednostkowaKwh: magazynLine.unitCapacityKwh,
+              mocJednostkowaKw: magazynLine.unitPowerKw,
+              pojemnoscKwh: magazynLine.totalCapacityKwh,
+              mocKw: magazynLine.totalPowerKw,
+              cenaNetto: magazynLine.totalPrice,
+              cenyPozycji: magazynLine.unitPrices,
+              ilosc: magazynLine.quantity,
               jednostka: "szt.",
             }
           : null,
@@ -856,10 +871,16 @@ export default function SunFeeKalkulator() {
               })(),
             }
           : null,
-        magazynData: magazynData
+        magazynData: magazynData && magazynLine
           ? {
               ...magazynData,
-              ilosc: Math.max(1, parseInt(String(magazynIlosc), 10) || 1),
+              capacityKwh: magazynLine.totalCapacityKwh,
+              powerKw: magazynLine.totalPowerKw,
+              unitCapacityKwh: magazynLine.unitCapacityKwh,
+              unitPowerKw: magazynLine.unitPowerKw,
+              priceNetto: magazynLine.totalPrice,
+              unitPrices: magazynLine.unitPrices,
+              ilosc: magazynLine.quantity,
               jednostka: "szt.",
             }
           : null,
@@ -1081,14 +1102,18 @@ export default function SunFeeKalkulator() {
             ) : (
               <>
                 <div>{selectedStorageObj?.name || "—"}</div>
-                <div>Ilość: {magazynIlosc} szt.</div>
+                <div>Ilość: {magazynLine?.quantity ?? magazynIlosc} szt.</div>
                 <div>
-                  {selectedStorageObj
-                    ? `${selectedStorageObj.capacityKwh} kWh · ${selectedStorageObj.powerKw} kW`
+                  {magazynLine
+                    ? `Razem: ${magazynLine.totalCapacityKwh} kWh · ${magazynLine.totalPowerKw} kW${
+                        magazynLine.quantity > 1 && selectedStorageObj
+                          ? ` (${selectedStorageObj.capacityKwh} kWh / ${selectedStorageObj.powerKw} kW × ${magazynLine.quantity})`
+                          : ""
+                      }`
                     : ""}
                 </div>
-                {showAllPrices && selectedStorageObj && (
-                  <div>{fmt(selectedStorageObj.priceNetto)} zł</div>
+                {showAllPrices && magazynLine && (
+                  <div>{formatTierBreakdown(magazynLine.unitPrices, fmt)} zł = {fmt(magazynLine.totalPrice)} zł</div>
                 )}
               </>
             )}
@@ -1718,10 +1743,10 @@ export default function SunFeeKalkulator() {
           <div className="kalk-section">
             <h2 className="kalk-section-title">Magazyn energii</h2>
 
-            <label className="kalk-label">Pola magazynu (jak w ofercie)</label>
+            <label className="kalk-label">Bateria × ilość</label>
             <div className="kalk-input-hint">
-              Nazwa uzupełnia się po wyborze magazynu z listy. Ilość sztuk można zmienić; jednostka jak w
-              ofercie (zwykle szt.).
+              Wybierz model baterii i liczbę sztuk. Pojemność i moc sumują się automatycznie. Cena netto to suma
+              cennika progowego (1. bateria + 2. bateria + …).
             </div>
             <div className="kalk-row kalk-row--top">
               <div className="kalk-col">
@@ -1735,23 +1760,33 @@ export default function SunFeeKalkulator() {
                 />
               </div>
               <div className="kalk-col">
-                <label className="kalk-label kalk-label--sm">Ilość</label>
+                <label className="kalk-label kalk-label--sm">Ilość baterii</label>
                 <input
-                  type="text"
-                  inputMode="numeric"
-                  readOnly={magazynId === "none"}
+                  type="number"
+                  min="1"
+                  max="99"
+                  disabled={magazynId === "none"}
                   className="kalk-input kalk-input--short"
-                  value={magazynId !== "none" ? magazynIlosc : "—"}
+                  value={magazynId !== "none" ? magazynIlosc : ""}
                   onChange={(e) => setMagazynIlosc(e.target.value.replace(/[^\d]/g, ""))}
                 />
               </div>
               <div className="kalk-col">
-                <label className="kalk-label kalk-label--sm">Jednostka</label>
+                <label className="kalk-label kalk-label--sm">Pojemność łącznie</label>
                 <input
                   type="text"
                   readOnly
                   className="kalk-input kalk-input--short"
-                  value={magazynData ? "szt." : "—"}
+                  value={magazynLine ? `${magazynLine.totalCapacityKwh} kWh` : "—"}
+                />
+              </div>
+              <div className="kalk-col">
+                <label className="kalk-label kalk-label--sm">Moc łącznie</label>
+                <input
+                  type="text"
+                  readOnly
+                  className="kalk-input kalk-input--short"
+                  value={magazynLine ? `${magazynLine.totalPowerKw} kW` : "—"}
                 />
               </div>
             </div>
@@ -1787,10 +1822,24 @@ export default function SunFeeKalkulator() {
                       {m.wagaKg != null && (
                         <span className="km-weight">{m.wagaKg} kg</span>
                       )}
-                      {showAllPrices && <span className="km-price">{fmt(m.priceNetto)} zł</span>}
+                      {showAllPrices && (
+                        <span className="km-price">
+                          od {fmt(normalizePriceTiers(m)[0] ?? m.priceNetto)} zł / szt.
+                        </span>
+                      )}
                     </label>
                   ))}
                 </div>
+
+                {magazynId !== "none" && magazynLine && showAllPrices && (
+                  <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 16 }}>
+                    <strong>Cennik progowy ({magazynLine.quantity} szt.)</strong>
+                    <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.55 }}>
+                      {formatTierBreakdown(magazynLine.unitPrices, fmt)} zł ={" "}
+                      <strong>{fmt(magazynLine.totalPrice)} zł netto</strong>
+                    </p>
+                  </div>
+                )}
 
                 {/* Weight warning for selected storage */}
                 {magazynId !== "none" && (() => {
@@ -1799,9 +1848,9 @@ export default function SunFeeKalkulator() {
                   if (sel.wagaKg != null) {
                     return (
                       <div className="kalk-info-box kalk-info-box--warn" style={{ marginTop: 16 }}>
-                        <strong>Uwaga – waga magazynu: {sel.wagaKg} kg</strong>
+                        <strong>Uwaga – waga magazynu: {magazynLine?.totalWeightKg ?? sel.wagaKg} kg</strong>
                         <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.55 }}>
-                          Zwróć uwagę na miejsce montażu. Magazyn o wadze <strong>{sel.wagaKg} kg</strong> musi być łatwy do wniesienia i zamontowania.
+                          Zwróć uwagę na miejsce montażu. Magazyn o łącznej wadze ok. <strong>{magazynLine?.totalWeightKg ?? sel.wagaKg} kg</strong> musi być łatwy do wniesienia i zamontowania.
                           Upewnij się, że trasa wniesienia (schody, drzwi, przejścia) pozwala na transport gabarytu tej wagi.
                         </p>
                       </div>
