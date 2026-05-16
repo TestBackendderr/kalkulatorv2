@@ -1,0 +1,29 @@
+{
+  "name": "kalkulatorv2",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "axios": "^1.9.0",
+    "chart.js": "^4.5.0",
+    "jspdf": "^4.2.1",
+    "lodash": "^4.17.21",
+    "lucide-react": "^0.511.0",
+    "next": "15.3.8",
+    "react": "^19.0.1",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^19.0.0",
+    "react-toastify": "^11.0.5",
+    "sass": "^1.87.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.1",
+    "@types/react": "19.1.8",
+    "typescript": "5.8.3"
+  }
+}

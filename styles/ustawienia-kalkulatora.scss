@@ -1,0 +1,412 @@
+// ─── Ustawienia Kalkulatora ───────────────────────────────────────────────────
+
+$u-primary:   #1a56db;
+$u-primary-d: #1347b8;
+$u-danger:    #dc2626;
+$u-danger-lt: #fef2f2;
+$u-danger-bd: #fca5a5;
+$u-ok:        #15803d;
+$u-ok-bg:     #f0fdf4;
+$u-ok-bd:     #bbf7d0;
+$u-dark:      #111827;
+$u-mid:       #374151;
+$u-gray:      #6b7280;
+$u-gray-lt:   #9ca3af;
+$u-border:    #d1d5db;
+$u-bg:        #f9fafb;
+$u-white:     #ffffff;
+$u-shadow:    0 1px 2px rgba(0,0,0,.06), 0 3px 8px rgba(0,0,0,.05);
+$u-radius:    8px;
+$u-radius-sm: 5px;
+
+// ─── Page wrapper ─────────────────────────────────────────────────────────────
+
+.usk-wrapper {
+  padding: 0 0 40px;
+}
+
+// ─── Page header ──────────────────────────────────────────────────────────────
+
+.usk-page-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid $u-border;
+}
+
+.usk-page-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: $u-dark;
+  margin-bottom: 4px;
+}
+
+.usk-page-subtitle {
+  font-size: 13px;
+  color: $u-gray;
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+
+.usk-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 2px solid $u-border;
+  margin-bottom: 24px;
+}
+
+.usk-tab {
+  padding: 9px 18px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: $u-gray;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+
+  &:hover { color: $u-dark; }
+
+  &--active {
+    color: $u-primary;
+    border-bottom-color: $u-primary;
+    font-weight: 700;
+  }
+}
+
+// ─── Tab content card ─────────────────────────────────────────────────────────
+
+.usk-tab-content {
+  background: $u-white;
+  border: 1px solid $u-border;
+  border-radius: $u-radius;
+  box-shadow: $u-shadow;
+  padding: 24px;
+}
+
+// ─── Tab header (title + add button) ─────────────────────────────────────────
+
+.usk-tab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.usk-tab-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: $u-dark;
+}
+
+// ─── Buttons ──────────────────────────────────────────────────────────────────
+
+.usk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 16px;
+  border-radius: $u-radius-sm;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background .15s, opacity .15s;
+
+  &--primary {
+    background: $u-primary;
+    color: $u-white;
+
+    &:hover:not(:disabled) { background: $u-primary-d; }
+    &:disabled { opacity: .4; cursor: not-allowed; }
+  }
+
+  &--ghost {
+    background: $u-white;
+    color: $u-mid;
+    border: 1px solid $u-border;
+
+    &:hover { background: $u-bg; }
+  }
+
+  &--danger {
+    background: $u-danger;
+    color: $u-white;
+
+    &:hover { background: darken($u-danger, 8%); }
+  }
+
+  &--danger-outline {
+    background: transparent;
+    color: $u-danger;
+    border: 1px solid $u-danger-bd;
+
+    &:hover { background: $u-danger-lt; }
+  }
+
+  &--sm {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+}
+
+// ─── Table ────────────────────────────────────────────────────────────────────
+
+.usk-table-wrap {
+  overflow-x: auto;
+}
+
+.usk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th {
+    padding: 9px 12px;
+    background: $u-bg;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: $u-gray;
+    border-bottom: 1px solid $u-border;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    color: $u-mid;
+    vertical-align: middle;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  tbody tr:hover td { background: #fafafa; }
+}
+
+.usk-row--inactive td { color: $u-gray-lt; background: #fafafa; }
+.usk-strikethrough     { text-decoration: line-through; }
+
+.usk-actions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.usk-empty {
+  text-align: center;
+  color: $u-gray-lt;
+  padding: 32px !important;
+  font-style: italic;
+}
+
+// ─── Status badge ─────────────────────────────────────────────────────────────
+
+.usk-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+
+  &--active   { background: $u-ok-bg;   color: $u-ok;    border: 1px solid $u-ok-bd; }
+  &--inactive { background: $u-bg;      color: $u-gray;  border: 1px solid $u-border; }
+}
+
+// ─── Chips ────────────────────────────────────────────────────────────────────
+
+.usk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.usk-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #eff6ff;
+  color: $u-primary;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  &--empty { background: none; border: none; color: $u-gray-lt; }
+}
+
+// ─── Loading ──────────────────────────────────────────────────────────────────
+
+.usk-loading {
+  padding: 40px;
+  text-align: center;
+  color: $u-gray;
+  font-size: 13px;
+}
+
+// ─── Modal overlay ────────────────────────────────────────────────────────────
+
+.usk-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.usk-modal {
+  background: $u-white;
+  border-radius: $u-radius;
+  box-shadow: 0 8px 32px rgba(0,0,0,.18);
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  &--sm  { max-width: 360px; }
+  &--lg  { max-width: 560px; }
+}
+
+.usk-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid $u-border;
+
+  h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: $u-dark;
+    margin: 0;
+  }
+}
+
+.usk-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: $u-gray;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+
+  &:hover { background: $u-bg; color: $u-dark; }
+}
+
+.usk-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usk-modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid $u-border;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.usk-confirm-msg {
+  padding: 24px 20px 8px;
+  font-size: 14px;
+  color: $u-mid;
+  line-height: 1.55;
+}
+
+// ─── Form elements ────────────────────────────────────────────────────────────
+
+.usk-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: $u-mid;
+  margin-top: 12px;
+
+  &:first-child { margin-top: 0; }
+}
+
+.usk-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid $u-border;
+  border-radius: $u-radius-sm;
+  font-size: 13px;
+  color: $u-dark;
+  background: $u-white;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  margin-top: 4px;
+
+  &:focus {
+    border-color: $u-primary;
+    box-shadow: 0 0 0 3px rgba($u-primary, .12);
+  }
+
+  &::placeholder { color: $u-gray-lt; }
+}
+
+.usk-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.usk-form-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.usk-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: $u-mid;
+  cursor: pointer;
+  margin-top: 14px;
+
+  input[type="checkbox"] { accent-color: $u-primary; width: 15px; height: 15px; }
+}
+
+.usk-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid $u-border;
+  border-radius: $u-radius-sm;
+  background: $u-bg;
+}
+
+.usk-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: $u-mid;
+  cursor: pointer;
+
+  input[type="checkbox"] { accent-color: $u-primary; }
+}
+
+.usk-hint {
+  font-size: 12px;
+  color: $u-gray-lt;
+  font-style: italic;
+  margin: 4px 0;
+}

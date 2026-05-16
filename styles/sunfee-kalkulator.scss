@@ -1,0 +1,780 @@
+// ─── Sun Fee Kalkulator ───────────────────────────────────────────────────────
+
+$kalk-primary:   #1a56db;
+$kalk-primary-d: #1347b8;
+$kalk-ok:        #15803d;
+$kalk-ok-bg:     #f0fdf4;
+$kalk-ok-border: #bbf7d0;
+$kalk-err:       #b91c1c;
+$kalk-err-bg:    #fef2f2;
+$kalk-err-border:#fecaca;
+$kalk-warn-bg:   #fffbeb;
+$kalk-warn-brd:  #fde68a;
+$kalk-warn-text: #78350f;
+$kalk-dark:      #111827;
+$kalk-mid:       #374151;
+$kalk-gray:      #6b7280;
+$kalk-gray-lt:   #9ca3af;
+$kalk-border:    #d1d5db;
+$kalk-bg:        #f9fafb;
+$kalk-white:     #ffffff;
+$kalk-shadow:    0 1px 2px rgba(0,0,0,.06), 0 3px 8px rgba(0,0,0,.05);
+$kalk-radius:    10px;
+$kalk-radius-sm: 6px;
+
+// ─── Layout wrapper ───────────────────────────────────────────────────────────
+
+.kalk-wrapper {
+  padding: 80px 28px 48px;
+  max-width: 820px;
+  width: 100%;
+  margin-left: 0;
+  margin-right: auto;
+
+  @media (min-width: 1001px) {
+    // Centers the card in the area to the right of the 220px sidebar:
+    // left = 220 + (viewport - 220 - 820) / 2 = max(220, 50vw - 300px)
+    margin-left: max(220px, calc(50vw - 300px));
+    margin-right: auto;
+  }
+}
+
+// ─── Header ───────────────────────────────────────────────────────────────────
+
+.kalk-header {
+  margin-bottom: 24px;
+  border-bottom: 1px solid $kalk-border;
+  padding-bottom: 18px;
+}
+
+.kalk-title h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: $kalk-dark;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.kalk-subtitle {
+  color: $kalk-gray;
+  font-size: 13px;
+}
+
+// ─── Progress stepper ─────────────────────────────────────────────────────────
+
+.kalk-progress {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.kalk-step-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  padding: 0 6px;
+  cursor: default;
+  white-space: nowrap;
+
+  &.done {
+    cursor: pointer;
+
+    .kalk-step-num {
+      background: $kalk-dark;
+      border-color: $kalk-dark;
+      color: $kalk-white;
+      font-size: 11px;
+    }
+
+    .kalk-step-label { color: $kalk-mid; }
+  }
+
+  &.active {
+    .kalk-step-num {
+      background: $kalk-primary;
+      border-color: $kalk-primary;
+      color: $kalk-white;
+    }
+
+    .kalk-step-label {
+      color: $kalk-dark;
+      font-weight: 600;
+    }
+  }
+
+  &:disabled {
+    .kalk-step-num {
+      background: $kalk-white;
+      border-color: $kalk-border;
+      color: $kalk-gray-lt;
+    }
+
+    .kalk-step-label { color: $kalk-gray-lt; }
+  }
+}
+
+.kalk-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid $kalk-border;
+  background: $kalk-white;
+  color: $kalk-gray;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .2s, border-color .2s;
+}
+
+.kalk-step-label {
+  font-size: 11px;
+  color: $kalk-gray;
+  transition: color .2s;
+
+  @media (max-width: 600px) {
+    display: none;
+  }
+}
+
+.kalk-step-line {
+  flex: 1;
+  min-width: 16px;
+  height: 1px;
+  background: $kalk-border;
+  align-self: flex-start;
+  margin-top: 13px;
+  transition: background .2s;
+
+  &.done { background: $kalk-dark; }
+}
+
+// ─── Card ─────────────────────────────────────────────────────────────────────
+
+.kalk-card {
+  background: $kalk-white;
+  border-radius: $kalk-radius;
+  border: 1px solid $kalk-border;
+  box-shadow: $kalk-shadow;
+  padding: 28px 32px;
+
+  @media (max-width: 600px) {
+    padding: 20px 16px;
+  }
+}
+
+// ─── Section ──────────────────────────────────────────────────────────────────
+
+.kalk-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: $kalk-dark;
+  margin-bottom: 4px;
+}
+
+.kalk-section-desc {
+  font-size: 13px;
+  color: $kalk-gray;
+  margin-bottom: 18px;
+}
+
+// ─── Labels & inputs ──────────────────────────────────────────────────────────
+
+.kalk-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: $kalk-mid;
+  margin-top: 18px;
+  margin-bottom: 6px;
+}
+
+.kalk-label--sm {
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.kalk-input-hint {
+  font-size: 12px;
+  color: $kalk-gray;
+  margin-top: -2px;
+  margin-bottom: 6px;
+}
+
+.kalk-badge {
+  font-size: 11px;
+  font-weight: 500;
+  background: #eff6ff;
+  color: #1e40af;
+  padding: 1px 7px;
+  border-radius: 4px;
+
+  &.required {
+    background: #fef9c3;
+    color: #713f12;
+  }
+}
+
+.kalk-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid $kalk-border;
+  border-radius: $kalk-radius-sm;
+  font-size: 14px;
+  color: $kalk-dark;
+  background: $kalk-white;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+
+  &:focus {
+    border-color: $kalk-primary;
+    box-shadow: 0 0 0 3px rgba($kalk-primary, .12);
+  }
+
+  &::placeholder { color: $kalk-gray-lt; }
+
+  &--short { max-width: 180px; }
+
+  &--error {
+    border-color: #c0392b;
+    background: #fff8f7;
+    &:focus { box-shadow: 0 0 0 3px rgba(#c0392b, .12); }
+  }
+}
+
+.kalk-required {
+  color: #c0392b;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.kalk-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid $kalk-border;
+  border-radius: $kalk-radius-sm;
+  font-size: 14px;
+  color: $kalk-dark;
+  background: $kalk-white;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+  margin-top: 4px;
+  margin-bottom: 6px;
+
+  &:focus {
+    border-color: $kalk-primary;
+    box-shadow: 0 0 0 3px rgba($kalk-primary, .12);
+  }
+}
+
+.kalk-radio-group + .kalk-select {
+  margin-top: 12px;
+}
+
+// ─── Radio cards ──────────────────────────────────────────────────────────────
+
+.kalk-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+
+.kalk-radio-card {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid $kalk-border;
+  border-radius: $kalk-radius-sm;
+  font-size: 13px;
+  color: $kalk-mid;
+  cursor: pointer;
+  background: $kalk-white;
+  transition: border-color .15s, background .15s;
+  user-select: none;
+
+  input[type="radio"] { accent-color: $kalk-primary; }
+
+  &:hover {
+    border-color: $kalk-primary;
+    background: #eff6ff;
+  }
+
+  &.selected {
+    border-color: $kalk-primary;
+    background: #eff6ff;
+    color: $kalk-dark;
+    font-weight: 600;
+  }
+
+  &--warn.selected {
+    border-color: #d97706;
+    background: $kalk-warn-bg;
+  }
+}
+
+// ─── Falownik grid ────────────────────────────────────────────────────────────
+
+.kalk-falownik-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.kalk-falownik-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 12px 8px;
+  border: 1px solid $kalk-border;
+  border-radius: $kalk-radius-sm;
+  background: $kalk-white;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  user-select: none;
+  text-align: center;
+
+  input[type="radio"] { display: none; }
+
+  &:hover {
+    border-color: $kalk-primary;
+    background: #eff6ff;
+  }
+
+  &.selected {
+    border-color: $kalk-primary;
+    background: #eff6ff;
+  }
+
+  .kf-name  { font-size: 14px; font-weight: 700; color: $kalk-dark; }
+  .kf-power { font-size: 12px; color: $kalk-gray; margin-top: 1px; }
+  .kf-price { font-size: 13px; font-weight: 600; color: $kalk-primary; margin-top: 5px; }
+}
+
+// ─── Magazyn grid ─────────────────────────────────────────────────────────────
+
+.kalk-magazyn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.kalk-magazyn-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 14px 10px;
+  border: 1px solid $kalk-border;
+  border-radius: $kalk-radius-sm;
+  background: $kalk-white;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  text-align: center;
+  user-select: none;
+
+  input[type="radio"] { display: none; }
+
+  &:hover {
+    border-color: $kalk-primary;
+    background: #eff6ff;
+  }
+
+  &.selected {
+    border-color: $kalk-primary;
+    background: #eff6ff;
+  }
+
+  .km-name   { font-size: 13px; font-weight: 600; color: $kalk-dark; }
+  .km-specs  { font-size: 12px; color: $kalk-gray; }
+  .km-weight { font-size: 11px; color: $kalk-warn-text; background: $kalk-warn-bg; border: 1px solid $kalk-warn-brd; border-radius: 4px; padding: 1px 6px; margin-top: 3px; align-self: center; text-align: center; }
+  .km-price  { font-size: 14px; font-weight: 700; color: $kalk-primary; margin-top: 5px; }
+}
+
+// ─── Row / col layout ─────────────────────────────────────────────────────────
+
+.kalk-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: end;
+  margin-top: 18px;
+
+  &--top { align-items: start; }
+
+  @media (max-width: 500px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kalk-col { display: flex; flex-direction: column; }
+
+// ─── Custom panel auto-price preview ─────────────────────────────────────────
+
+.kalk-custom-price-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: $kalk-radius-sm;
+  border: 1px solid $kalk-border;
+  background: $kalk-bg;
+  font-size: 13px;
+  color: $kalk-mid;
+
+  strong {
+    font-size: 15px;
+    font-weight: 700;
+    color: $kalk-dark;
+  }
+
+  &__rule {
+    color: $kalk-gray;
+    font-size: 12px;
+  }
+
+  &__transport {
+    width: 100%;
+    font-size: 12px;
+    color: $kalk-gray;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid $kalk-border;
+  }
+}
+
+// ─── Panel power preview (n × W = kWp) ────────────────────────────────────────
+
+.kalk-kwp-preview {
+  margin-top: 20px;
+  margin-bottom: 6px;
+  padding: 12px 16px;
+  border-radius: $kalk-radius-sm;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  font-size: 14px;
+  color: $kalk-mid;
+  line-height: 1.45;
+
+  &__eq strong {
+    color: $kalk-primary;
+    font-weight: 700;
+  }
+}
+
+// ─── Inline row ───────────────────────────────────────────────────────────────
+
+.kalk-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.kalk-calc-hint {
+  font-size: 13px;
+  font-weight: 600;
+  color: $kalk-primary;
+  background: #eff6ff;
+  padding: 5px 10px;
+  border-radius: $kalk-radius-sm;
+  border: 1px solid #bfdbfe;
+}
+
+// ─── Divider ──────────────────────────────────────────────────────────────────
+
+.kalk-divider {
+  height: 1px;
+  background: $kalk-border;
+  margin: 26px 0;
+}
+
+// ─── Info boxes ───────────────────────────────────────────────────────────────
+
+.kalk-info-box {
+  padding: 14px 16px;
+  border-radius: $kalk-radius-sm;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 16px 0;
+
+  &--warn {
+    background: $kalk-warn-bg;
+    border: 1px solid $kalk-warn-brd;
+    color: $kalk-warn-text;
+  }
+
+  &--info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e3a5f;
+  }
+}
+
+// ─── Navigation buttons ───────────────────────────────────────────────────────
+
+.kalk-nav {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid $kalk-border;
+}
+
+.kalk-actions-row {
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid $kalk-border;
+}
+
+.kalk-btn {
+  padding: 8px 20px;
+  border-radius: $kalk-radius-sm;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background .15s, box-shadow .15s, opacity .15s;
+  letter-spacing: 0.01em;
+
+  &--primary {
+    background: $kalk-primary;
+    color: $kalk-white;
+
+    &:hover:not(:disabled) {
+      background: $kalk-primary-d;
+    }
+
+    &:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+  }
+
+  &--ghost {
+    background: $kalk-white;
+    color: $kalk-mid;
+    border: 1px solid $kalk-border;
+
+    &:hover {
+      background: $kalk-bg;
+      border-color: #9ca3af;
+    }
+  }
+
+  &--secondary {
+    background: $kalk-white;
+    color: $kalk-primary;
+    border: 1.5px solid $kalk-primary;
+
+    &:hover:not(:disabled) {
+      background: #eff6ff;
+    }
+
+    &:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+  }
+}
+
+// ─── Summary table ────────────────────────────────────────────────────────────
+
+.kalk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 20px;
+
+  th {
+    background: $kalk-bg;
+    padding: 9px 12px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: $kalk-gray;
+    border-bottom: 1px solid $kalk-border;
+  }
+
+  td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    color: $kalk-mid;
+  }
+
+  tbody tr:last-child td { border-bottom: 1px solid $kalk-border; }
+
+  .kalk-row-margin td { background: #fefce8; }
+}
+
+.kalk-td-price {
+  text-align: right;
+  font-weight: 600;
+  white-space: nowrap;
+  color: $kalk-dark;
+}
+
+.kalk-note {
+  font-size: 11px;
+  color: $kalk-gray-lt;
+  font-style: italic;
+}
+
+.kalk-total-row td {
+  font-size: 14px;
+  font-weight: 700;
+  color: $kalk-dark;
+  border-top: 2px solid $kalk-border;
+  border-bottom: none;
+  background: $kalk-bg;
+  padding-top: 11px;
+}
+
+.kalk-brutto-row td {
+  font-size: 15px;
+  font-weight: 700;
+  color: $kalk-primary;
+  border-bottom: none;
+  background: #eff6ff;
+  padding-bottom: 11px;
+}
+
+// ─── Result card ──────────────────────────────────────────────────────────────
+
+.kalk-results-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.kalk-result-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: $kalk-radius-sm;
+  border: 1px solid $kalk-border;
+  background: $kalk-bg;
+
+  &--ok  { background: $kalk-ok-bg;  border-color: $kalk-ok-border; }
+  &--err { background: $kalk-err-bg; border-color: $kalk-err-border; }
+  &--na  { background: $kalk-bg;     border-color: $kalk-border; }
+
+  .kalk-result-body {
+    strong {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: $kalk-dark;
+      margin-bottom: 4px;
+    }
+
+    p {
+      font-size: 13px;
+      color: $kalk-mid;
+      line-height: 1.55;
+      margin: 0;
+    }
+  }
+}
+
+// ─── Rabat box ───────────────────────────────────────────────────────────────
+
+.kalk-rabat-box {
+  margin-top: 16px;
+  border: 1px solid $kalk-border;
+  border-radius: $kalk-radius-sm;
+  background: $kalk-bg;
+  overflow: hidden;
+}
+
+.kalk-rabat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: $kalk-mid;
+  border-bottom: 1px solid $kalk-border;
+
+  &:last-child { border-bottom: none; }
+
+  &--discount {
+    background: #fef2f2;
+    color: $kalk-err;
+    strong { color: $kalk-err; }
+  }
+
+  &--final {
+    background: #f0fdf4;
+    color: $kalk-ok;
+    font-size: 14px;
+    font-weight: 700;
+    strong { color: $kalk-ok; font-size: 15px; }
+  }
+
+  &--sm {
+    font-size: 12px;
+    color: $kalk-gray;
+    background: $kalk-white;
+  }
+
+  &--wm {
+    font-weight: 600;
+    color: $kalk-dark;
+  }
+}
+
+.kalk-rabat-divider {
+  height: 1px;
+  background: $kalk-border;
+  margin: 0;
+}
+
+// ─── Catalog loading ──────────────────────────────────────────────────────────
+
+.kalk-loading-catalog {
+  margin-top: 80px;
+  padding: 40px;
+  text-align: center;
+  color: $kalk-gray;
+  font-size: 14px;
+}
+
+// ─── Status dot ───────────────────────────────────────────────────────────────
+
+.kalk-result-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 3px;
+
+  &.dot--ok  { background: $kalk-ok; }
+  &.dot--err { background: $kalk-err; }
+  &.dot--na  { background: $kalk-gray-lt; }
+}

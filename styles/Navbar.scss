@@ -1,0 +1,102 @@
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: #1a252f;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(10px, 3vw, 20px);
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2vw, 12px);
+}
+
+.navbar-logo a {
+  font-size: clamp(16px, 4vw, 20px);
+  font-weight: 600;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.navbar-user {
+  font-size: clamp(12px, 3vw, 14px);
+}
+
+.navbar-actions .logout-btn {
+  background-color: #dc3545;
+  color: #ffffff;
+  border: none;
+  padding: clamp(6px, 2vw, 8px) clamp(12px, 3vw, 16px);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: clamp(12px, 3vw, 14px);
+  transition: background-color 0.3s ease;
+}
+
+.navbar-actions .logout-btn:hover {
+  background-color: #c82333;
+}
+
+.burger {
+  background: none;
+  border: none;
+  color: white;
+  display: none;
+  cursor: pointer;
+  padding: clamp(6px, 2vw, 8px);
+}
+
+@media (max-width: 1000px) {
+  .burger {
+    display: block;
+  }
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    height: 50px;
+    padding: 0 clamp(8px, 2vw, 12px);
+  }
+
+  .navbar-logo a {
+    font-size: clamp(14px, 3.5vw, 18px);
+  }
+
+  .navbar-user {
+    font-size: clamp(11px, 2.5vw, 13px);
+  }
+
+  .navbar-actions .logout-btn {
+    padding: clamp(5px, 1.5vw, 7px) clamp(10px, 2.5vw, 12px);
+    font-size: clamp(11px, 2.5vw, 13px);
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar {
+    height: 48px;
+    padding: 0 clamp(6px, 1.5vw, 10px);
+  }
+
+  .navbar-logo a {
+    font-size: clamp(12px, 3vw, 16px);
+  }
+
+  .navbar-user {
+    font-size: clamp(10px, 2vw, 12px);
+  }
+
+  .navbar-actions .logout-btn {
+    padding: clamp(4px, 1vw, 6px) clamp(8px, 2vw, 10px);
+    font-size: clamp(10px, 2vw, 12px);
+  }
+}
