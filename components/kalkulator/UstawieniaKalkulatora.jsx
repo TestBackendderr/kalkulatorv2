@@ -2,10 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
 import { normalizePriceTiers } from "@/utils/magazynPricing";
-import {
-  mergeFalownikCatalog,
-  saveFalownikPriceTiers,
-} from "@/utils/falownikTiersStorage";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -79,7 +75,7 @@ function FalownikiTab() {
     setLoading(true);
     try {
       const res = await api.get("/kalkulator/falowniki");
-      setItems(mergeFalownikCatalog(res.data));
+      setItems(res.data);
     } catch {
       toast.error("Nie udało się pobrać falowników");
     } finally {
@@ -141,20 +137,29 @@ function FalownikiTab() {
       const payload = {
         name: form.name.trim(),
         powerKw: +form.powerKw,
+        priceTiers: tiers,
         priceNetto: tiers[0],
         isActive: form.isActive,
       };
       if (modal.mode === "add") {
         const res = await api.post("/kalkulator/falowniki", payload);
-        if (res.data?.id) saveFalownikPriceTiers(res.data.id, tiers);
+        setItems((prev) => [
+          ...prev,
+          { ...res.data, priceTiers: tiers, priceNetto: tiers[0] },
+        ]);
         toast.success("Falownik dodany");
       } else {
-        await api.patch(`/kalkulator/falowniki/${modal.id}`, payload);
-        saveFalownikPriceTiers(modal.id, tiers);
+        const res = await api.patch(`/kalkulator/falowniki/${modal.id}`, payload);
+        setItems((prev) =>
+          prev.map((i) =>
+            i.id === modal.id
+              ? { ...res.data, priceTiers: tiers, priceNetto: tiers[0] }
+              : i,
+          ),
+        );
         toast.success("Falownik zaktualizowany");
       }
       closeModal();
-      load();
     } catch (e) {
       toast.error(e.response?.data?.message || "Błąd zapisu");
     } finally {
@@ -608,7 +613,7 @@ function MagazynyTab() {
   const loadFalowniki = useCallback(async () => {
     try {
       const res = await api.get("/kalkulator/falowniki?onlyActive=true");
-      setFalowniki(mergeFalownikCatalog(res.data));
+      setFalowniki(res.data);
     } catch {
       toast.error("Nie udało się pobrać falowników");
     }

@@ -14,8 +14,6 @@ import {
   getFalownikUnitMocKw,
   normalizeFalownikRecord,
 } from "@/utils/falownikPricing";
-import { mergeFalownikCatalog } from "@/utils/falownikTiersStorage";
-
 const CONSTRUCTION = { grunt: 450, dach: 350 };
 
 const LABOR_TIERS = [
@@ -221,9 +219,9 @@ export default function SunFeeKalkulator() {
         api.get("/kalkulator/klimatyzatory"),
         api.get("/lead-sources?onlyActive=true"),
       ]);
-      const activeFalowniki = mergeFalownikCatalog(
-        (fRes.data || []).filter((f) => f.isActive !== false),
-      ).map(normalizeFalownikRecord);
+      const activeFalowniki = (fRes.data || [])
+        .filter((f) => f.isActive !== false)
+        .map(normalizeFalownikRecord);
       const activePanele    = (pRes.data || []).filter((p) => p.isActive !== false);
       const activeMagazyny  = (mRes.data || []).filter((m) => m.isActive !== false);
       const activeKlimatyzatory = (kRes.data || []).filter((k) => k.isActive !== false);
