@@ -112,8 +112,16 @@ export function buildPdfContextFromSavedRecord(record, showAllPrices) {
       priceNetto: p.panelWlasny.cenaNettoPrzyliczona,
     };
 
+  const falIloscSaved = Number(f?.iloscSzt) > 0 ? Number(f.iloscSzt) : 1;
   const falownikData = f.falownik
-    ? { name: f.falownik.nazwa, powerKw: f.falownik.mocKw, priceNetto: f.falownik.cenaNetto }
+    ? {
+        name: f.falownik.nazwa,
+        powerKw: f.falownik.mocKw,
+        unitPowerKw: f.falownik.mocJednostkowaKw ?? f.falownik.mocKw,
+        priceNetto: f.falownik.cenaNetto,
+        unitPrices: f.falownik.cenyPozycji,
+        ilosc: falIloscSaved,
+      }
     : null;
   const magazynData = d?.magazynEnergii
     ? {
@@ -198,8 +206,11 @@ export function buildPdfContextFromSavedRecord(record, showAllPrices) {
         existingPvKwp: String(ins.mocPvKwp ?? ""),
         panelCount: String(p.liczba ?? ""),
         panelData,
-        falownikMocPaneliKw: String(f.falownik?.mocKw ?? ""),
+        falownikMocPaneliKw: String(
+          f.falownik?.mocJednostkowaKw ?? f.falownik?.mocKw ?? "",
+        ),
         falownikData,
+        falownikIlosc: falIloscSaved,
         magazynData,
         magazynIlosc: meSzt,
       });
@@ -212,8 +223,7 @@ export function buildPdfContextFromSavedRecord(record, showAllPrices) {
         canInstallWithoutUpgrade: connKwSaved > 0 ? effectivePower <= connKwSaved : null,
       };
     })(),
-    falownikIloscSzt:
-      Number(f?.iloscSzt) > 0 ? Number(f.iloscSzt) : 1,
+    falownikIloscSzt: falIloscSaved,
   };
 }
 
@@ -433,9 +443,19 @@ export async function renderKalkulatorWycenaPdfAndSave(ctx) {
   krokHd("Krok 3: Falownik");
   krokLine(`Tryb: ${falActionLabel}`);
   if (falownikData) {
+    const fIl = Math.max(1, parseInt(String(falownikIloscSzt ?? 1), 10) || 1);
     const fPrice = showAllPrices && falownikData.priceNetto ? ` — ${fmtPdf(falownikData.priceNetto)} zł` : "";
-    krokLine(`${falownikData.name} (${falownikData.powerKw} kW)${fPrice}`);
-    krokLine(`Moc falownika: ${falownikData.powerKw} kW`);
+    krokLine(
+      fIl > 1
+        ? `${falownikData.name} × ${fIl} szt.${fPrice}`
+        : `${falownikData.name} (${falownikData.powerKw} kW)${fPrice}`,
+    );
+    krokLine(`Moc łącznie: ${falownikData.powerKw} kW`);
+    if (showAllPrices && Array.isArray(falownikData.unitPrices) && falownikData.unitPrices.length > 1) {
+      krokLine(
+        `${falownikData.unitPrices.map((p) => fmtPdf(p)).join(" + ")} zł = ${fmtPdf(falownikData.priceNetto)} zł netto`,
+      );
+    }
   }
   y += 2;
 
@@ -990,7 +1010,13 @@ export function buildPdfContextFromLiveCalculator({
       : null,
     falownikAction,
     falownikData: falownikData
-      ? { name: falownikData.name, powerKw: falownikData.powerKw, priceNetto: falownikData.priceNetto ?? falownikData.price }
+      ? {
+          name: falownikData.name,
+          powerKw: falownikData.powerKw,
+          priceNetto: falownikData.priceNetto ?? falownikData.price,
+          unitPrices: falownikData.unitPrices,
+          ilosc: falownikIloscSzt,
+        }
       : null,
     magazynData: magazynData
       ? {

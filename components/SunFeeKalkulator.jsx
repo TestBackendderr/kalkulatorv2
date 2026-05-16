@@ -9,6 +9,12 @@ import {
 } from "@/utils/kalkulatorWycenaPdf";
 import { computeEffectivePower } from "@/utils/mocPrzylaczeniowaSheet";
 import { computeMagazynLine, formatTierBreakdown, normalizePriceTiers } from "@/utils/magazynPricing";
+import {
+  computeFalownikLine,
+  getFalownikUnitMocKw,
+  normalizeFalownikRecord,
+} from "@/utils/falownikPricing";
+import { mergeFalownikCatalog } from "@/utils/falownikTiersStorage";
 
 const CONSTRUCTION = { grunt: 450, dach: 350 };
 
@@ -215,7 +221,9 @@ export default function SunFeeKalkulator() {
         api.get("/kalkulator/klimatyzatory"),
         api.get("/lead-sources?onlyActive=true"),
       ]);
-      const activeFalowniki = (fRes.data || []).filter((f) => f.isActive !== false);
+      const activeFalowniki = mergeFalownikCatalog(
+        (fRes.data || []).filter((f) => f.isActive !== false),
+      ).map(normalizeFalownikRecord);
       const activePanele    = (pRes.data || []).filter((p) => p.isActive !== false);
       const activeMagazyny  = (mRes.data || []).filter((m) => m.isActive !== false);
       const activeKlimatyzatory = (kRes.data || []).filter((k) => k.isActive !== false);
@@ -304,8 +312,21 @@ export default function SunFeeKalkulator() {
   const falownikData = useMemo(() => {
     if (falownikSource === "custom") return null;
     const found = falownikiList.find((f) => String(f.id) === String(selectedFalownik));
-    return found ? { ...found, price: found.priceNetto } : null;
+    if (!found) return null;
+    const tiers = normalizePriceTiers(found);
+    return { ...found, priceTiers: tiers, price: tiers[0] ?? found.priceNetto };
   }, [falownikSource, selectedFalownik, falownikiList]);
+
+  const falownikUnitMocKw = useMemo(
+    () => getFalownikUnitMocKw(falownikMocPaneliKw, falownikData),
+    [falownikMocPaneliKw, falownikData],
+  );
+
+  const falownikLine = useMemo(() => {
+    if (!falownikData) return null;
+    const qty = Math.max(1, parseInt(String(falownikIlosc), 10) || 1);
+    return computeFalownikLine(falownikData, qty, falownikUnitMocKw);
+  }, [falownikData, falownikIlosc, falownikUnitMocKw]);
 
   const falownikCatalogPowerKw = useMemo(() => {
     if (falownikSource === "custom") return null;
@@ -405,15 +426,16 @@ export default function SunFeeKalkulator() {
       }
     }
 
-    // Inverter — cena katalogowa × ilość sztuk
-    if (falownikAction === "wymiana" && falownikData) {
-      const falSzt = Math.max(1, parseInt(String(falownikIlosc), 10) || 1);
-      const falLineTotal = falownikData.price * falSzt;
+    // Inverter — cennik progowy (1. + 2. + 3. falownik…)
+    if (falownikAction === "wymiana" && falownikData && falownikLine) {
+      const falSzt = falownikLine.quantity;
+      const breakdown = formatTierBreakdown(falownikLine.unitPrices, fmt);
       const falLabel =
         falSzt > 1
-          ? `Falownik ${falownikData.name} (${falSzt} × ${fmt(falownikData.price)} zł)`
+          ? `Falownik ${falownikData.name} (${falSzt} szt., ${falownikLine.totalPowerKw} kW)`
           : `Falownik ${falownikData.name}`;
-      add(falLabel, falLineTotal);
+      const priceNote = falSzt > 1 && breakdown ? ` (${breakdown} zł)` : "";
+      add(`${falLabel}${priceNote}`, falownikLine.totalPrice);
     }
 
     // Energy storage (cennik progowy: 1. + 2. + 3. bateria…)
@@ -483,6 +505,7 @@ export default function SunFeeKalkulator() {
       panelData,
       falownikMocPaneliKw,
       falownikData,
+      falownikIlosc,
       magazynData,
       magazynIlosc,
     });
@@ -497,7 +520,7 @@ export default function SunFeeKalkulator() {
   }, [
     existingPvKwp, connectionKw, wm,
     panelOption, panelData, panelCount, mountType, panelSource,
-    falownikAction, falownikData, falownikMocPaneliKw, falownikSource, falownikIlosc,
+    falownikAction, falownikData, falownikLine, falownikMocPaneliKw, falownikSource, falownikIlosc,
     magazynData, magazynIlosc, magazynLine,
     rozdzielnica,
     przekop, przekopMetry,
@@ -752,18 +775,24 @@ export default function SunFeeKalkulator() {
         falownik: {
           akcja:  falownikAction,
           zrodlo: falownikSource,
-          iloscSzt: Math.max(1, parseInt(falownikIlosc, 10) || 1),
-          falownik: falownikData
+          iloscSzt: falownikLine?.quantity ?? Math.max(1, parseInt(falownikIlosc, 10) || 1),
+          falownik: falownikData && falownikLine
             ? {
                 id: selectedFalownik,
                 nazwa: falownikData.name,
-                mocKw: (() => {
-                  const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-                  return Number.isFinite(p) && p > 0 ? p : falownikData.powerKw;
-                })(),
-                cenaNetto: falownikData.price,
+                mocJednostkowaKw: falownikLine.unitMocKw,
+                mocKw: falownikLine.totalPowerKw,
+                cenaNetto: falownikLine.totalPrice,
+                cenyPozycji: falownikLine.unitPrices,
               }
-            : null,
+            : falownikSource === "custom"
+              ? {
+                  mocJednostkowaKw: falownikUnitMocKw,
+                  mocKw:
+                    falownikUnitMocKw *
+                    Math.max(1, parseInt(falownikIlosc, 10) || 1),
+                }
+              : null,
         },
         magazynEnergii: magazynData && magazynLine
           ? {
@@ -862,15 +891,17 @@ export default function SunFeeKalkulator() {
         mountType,
         panelData,
         falownikAction,
-        falownikData: falownikData
-          ? {
-              ...falownikData,
-              powerKw: (() => {
-                const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-                return Number.isFinite(p) && p > 0 ? p : falownikData.powerKw;
-              })(),
-            }
-          : null,
+        falownikData:
+          falownikData && falownikLine
+            ? {
+                ...falownikData,
+                powerKw: falownikLine.totalPowerKw,
+                unitPowerKw: falownikLine.unitMocKw,
+                priceNetto: falownikLine.totalPrice,
+                unitPrices: falownikLine.unitPrices,
+                ilosc: falownikLine.quantity,
+              }
+            : null,
         magazynData: magazynData && magazynLine
           ? {
               ...magazynData,
@@ -975,17 +1006,12 @@ export default function SunFeeKalkulator() {
     const selectedInverterObj = falownikiList.find((f) => String(f.id) === String(selectedFalownik)) || null;
 
     const falPodgladMocKw =
-      falownikSource === "custom"
-        ? (() => {
-            const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-            return Number.isFinite(p) && p > 0 ? p : null;
-          })()
-        : falownikData != null
-          ? (() => {
-              const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-              return Number.isFinite(p) && p > 0 ? p : falownikData.powerKw;
-            })()
-          : null;
+      falownikLine?.totalPowerKw ??
+      (falownikUnitMocKw > 0
+        ? Math.round(
+            falownikUnitMocKw * Math.max(1, parseInt(falownikIlosc, 10) || 1) * 100,
+          ) / 100
+        : null);
 
     const selectedStorageObj =
       magazynyList.find((m) => String(m.id) === String(magazynId)) || null;
@@ -1084,7 +1110,17 @@ export default function SunFeeKalkulator() {
               )
             ) : null}
             {falPodgladMocKw != null && (
-              <div>Moc Paneli (Z Falownika): {falPodgladMocKw} kW</div>
+              <div>
+                Moc łącznie (falownik): {falPodgladMocKw} kW
+                {falownikLine && falownikLine.quantity > 1 && falownikUnitMocKw > 0 && (
+                  <> ({falownikUnitMocKw} kW × {falownikLine.quantity})</>
+                )}
+              </div>
+            )}
+            {showAllPrices && falownikLine && (
+              <div>
+                {formatTierBreakdown(falownikLine.unitPrices, fmt)} zł = {fmt(falownikLine.totalPrice)} zł
+              </div>
             )}
           </div>
         </div>
@@ -1629,7 +1665,11 @@ export default function SunFeeKalkulator() {
                             onChange={() => setSelectedFalownik(f.id)} />
                           <span className="kf-name">{f.name}</span>
                           <span className="kf-power">{f.powerKw} kW</span>
-                          {showAllPrices && <span className="kf-price">{fmt(f.priceNetto)} zł</span>}
+                          {showAllPrices && (
+                            <span className="kf-price">
+                              od {fmt(normalizePriceTiers(f)[0] ?? f.priceNetto)} zł
+                            </span>
+                          )}
                         </label>
                       ))}
                     </div>
@@ -1732,7 +1772,40 @@ export default function SunFeeKalkulator() {
                       }
                     />
                   </div>
+                  <div className="kalk-col">
+                    <label className="kalk-label kalk-label--sm">Moc łącznie</label>
+                    <input
+                      type="text"
+                      readOnly
+                      className="kalk-input kalk-input--short"
+                      value={
+                        falownikLine
+                          ? `${falownikLine.totalPowerKw} kW`
+                          : falownikUnitMocKw > 0
+                            ? `${(
+                                Math.round(
+                                  falownikUnitMocKw *
+                                    Math.max(1, parseInt(falownikIlosc, 10) || 1) *
+                                    100,
+                                ) / 100
+                              )} kW`
+                            : "—"
+                      }
+                    />
+                  </div>
                 </div>
+                {showAllPrices && falownikLine && falownikData && (
+                  <div className="kalk-tier-list" style={{ marginTop: 8 }}>
+                    {falownikLine.unitPrices.map((p, i) => (
+                      <div key={i}>
+                        {i + 1}. falownik — {fmt(p)} zł
+                      </div>
+                    ))}
+                    <div className="kalk-tier-list-total">
+                      Razem: {formatTierBreakdown(falownikLine.unitPrices, fmt)} zł = {fmt(falownikLine.totalPrice)} zł
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

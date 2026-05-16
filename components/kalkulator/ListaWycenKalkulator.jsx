@@ -117,7 +117,16 @@ function DetailModal({ id, onClose }) {
             <h4 className="lwk-section-hd">Falownik</h4>
             <table className="lwk-detail-table"><tbody>
               <tr><td>Akcja</td><td>{d?.falownik?.akcja === "wymiana" ? "Wymiana falownika" : "Nie wymieniamy"}</td></tr>
-              {d?.falownik?.falownik && <tr><td>Model</td><td>{d.falownik.falownik.nazwa} ({d.falownik.falownik.mocKw} kW)</td></tr>}
+              {d?.falownik?.falownik && (
+                <>
+                  <tr><td>Model</td><td>{d.falownik.falownik.nazwa}</td></tr>
+                  <tr><td>Ilość</td><td>{d.falownik.iloscSzt ?? 1} szt.</td></tr>
+                  <tr><td>Moc łącznie</td><td>{d.falownik.falownik.mocKw} kW</td></tr>
+                  {Array.isArray(d.falownik.falownik.cenyPozycji) && d.falownik.falownik.cenyPozycji.length > 1 && (
+                    <tr><td>Cennik</td><td>{d.falownik.falownik.cenyPozycji.join(" + ")} zł</td></tr>
+                  )}
+                </>
+              )}
             </tbody></table>
 
             <h4 className="lwk-section-hd">Magazyn energii</h4>

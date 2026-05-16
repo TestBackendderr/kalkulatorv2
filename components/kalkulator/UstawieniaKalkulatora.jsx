@@ -2,6 +2,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
 import { normalizePriceTiers } from "@/utils/magazynPricing";
+import {
+  mergeFalownikCatalog,
+  saveFalownikPriceTiers,
+} from "@/utils/falownikTiersStorage";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -13,7 +17,12 @@ const TABS = [
   { key: "lead-sources",   label: "Koszty marketingowe" },
 ];
 
-const EMPTY_FALOWNIK = { name: "", powerKw: "", priceNetto: "", isActive: true };
+const EMPTY_FALOWNIK = {
+  name: "",
+  powerKw: "",
+  priceTiers: ["3000", "2950", "2940", "2930"],
+  isActive: true,
+};
 const EMPTY_PANEL    = { name: "", powerW: "",  priceNetto: "", isActive: true };
 const EMPTY_KLIMATYZATOR = { name: "", priceNetto: "", isActive: true };
 const EMPTY_MAGAZYN  = {
@@ -70,7 +79,7 @@ function FalownikiTab() {
     setLoading(true);
     try {
       const res = await api.get("/kalkulator/falowniki");
-      setItems(res.data);
+      setItems(mergeFalownikCatalog(res.data));
     } catch {
       toast.error("Nie udało się pobrać falowników");
     } finally {
@@ -81,13 +90,46 @@ function FalownikiTab() {
   useEffect(() => { load(); }, [load]);
 
   const openAdd  = () => { setForm(EMPTY_FALOWNIK); setModal({ mode: "add" }); };
-  const openEdit = (item) => { setForm({ name: item.name, powerKw: item.powerKw, priceNetto: item.priceNetto, isActive: item.isActive }); setModal({ mode: "edit", id: item.id }); };
+  const openEdit = (item) => {
+    setForm({
+      name: item.name,
+      powerKw: item.powerKw,
+      priceTiers: normalizePriceTiers(item).map(String),
+      isActive: item.isActive,
+    });
+    setModal({ mode: "edit", id: item.id });
+  };
   const closeModal = () => setModal(null);
+
+  const setTierPrice = (index, value) => {
+    setForm((prev) => {
+      const tiers = [...(prev.priceTiers || [])];
+      tiers[index] = value;
+      return { ...prev, priceTiers: tiers };
+    });
+  };
+
+  const addTier = () => {
+    setForm((prev) => {
+      const tiers = [...(prev.priceTiers || [])];
+      const last = tiers.length ? tiers[tiers.length - 1] : "";
+      tiers.push(last);
+      return { ...prev, priceTiers: tiers };
+    });
+  };
+
+  const removeTier = (index) => {
+    setForm((prev) => {
+      const tiers = (prev.priceTiers || []).filter((_, i) => i !== index);
+      return { ...prev, priceTiers: tiers.length ? tiers : [""] };
+    });
+  };
 
   const validate = () => {
     if (!form.name.trim())               { toast.warn("Nazwa jest wymagana"); return false; }
     if (!form.powerKw || +form.powerKw <= 0) { toast.warn("Moc musi być większa od 0"); return false; }
-    if (!form.priceNetto || +form.priceNetto <= 0) { toast.warn("Cena musi być większa od 0"); return false; }
+    const tiers = (form.priceTiers || []).map((p) => +p).filter((n) => n > 0);
+    if (!tiers.length) { toast.warn("Podaj co najmniej jedną cenę w cenniku progowym"); return false; }
     return true;
   };
 
@@ -95,12 +137,20 @@ function FalownikiTab() {
     if (!validate()) return;
     setSaving(true);
     try {
-      const payload = { name: form.name.trim(), powerKw: +form.powerKw, priceNetto: +form.priceNetto, isActive: form.isActive };
+      const tiers = (form.priceTiers || []).map((p) => +p).filter((n) => n > 0);
+      const payload = {
+        name: form.name.trim(),
+        powerKw: +form.powerKw,
+        priceNetto: tiers[0],
+        isActive: form.isActive,
+      };
       if (modal.mode === "add") {
-        await api.post("/kalkulator/falowniki", payload);
+        const res = await api.post("/kalkulator/falowniki", payload);
+        if (res.data?.id) saveFalownikPriceTiers(res.data.id, tiers);
         toast.success("Falownik dodany");
       } else {
         await api.patch(`/kalkulator/falowniki/${modal.id}`, payload);
+        saveFalownikPriceTiers(modal.id, tiers);
         toast.success("Falownik zaktualizowany");
       }
       closeModal();
@@ -139,7 +189,7 @@ function FalownikiTab() {
               <tr>
                 <th>Nazwa</th>
                 <th>Moc (kW)</th>
-                <th>Cena netto (zł)</th>
+                <th>Cennik progowy (zł)</th>
                 <th>Status</th>
                 <th>Akcje</th>
               </tr>
@@ -152,7 +202,14 @@ function FalownikiTab() {
                 <tr key={item.id} className={item.isActive ? "" : "usk-row--inactive"}>
                   <td className={item.isActive ? "" : "usk-strikethrough"}>{item.name}</td>
                   <td>{item.powerKw}</td>
-                  <td>{fmt(item.priceNetto)} zł</td>
+                  <td>
+                    {normalizePriceTiers(item).slice(0, 4).map((p, i) => (
+                      <span key={i} className="usk-chip" style={{ marginRight: 4 }}>
+                        {i + 1}.: {fmt(p)}
+                      </span>
+                    ))}
+                    {normalizePriceTiers(item).length > 4 && "…"}
+                  </td>
                   <td><StatusBadge isActive={item.isActive} /></td>
                   <td className="usk-actions">
                     <button className="usk-btn usk-btn--sm" onClick={() => openEdit(item)}>Edytuj</button>
@@ -179,8 +236,38 @@ function FalownikiTab() {
               <label className="usk-label">Moc (kW) *</label>
               <input className="usk-input" type="number" min="0.1" step="0.1" value={form.powerKw} onChange={(e) => setForm({ ...form, powerKw: e.target.value })} placeholder="np. 5" />
 
-              <label className="usk-label">Cena netto (zł) *</label>
-              <input className="usk-input" type="number" min="1" step="1" value={form.priceNetto} onChange={(e) => setForm({ ...form, priceNetto: e.target.value })} placeholder="np. 5000" />
+              <label className="usk-label">Cennik progowy (zł netto) *</label>
+              <p className="usk-hint" style={{ marginTop: 0 }}>
+                Cena za 1., 2., 3. … falownik. Przy większej ilości ostatnia zdefiniowana cena powtarza się.
+              </p>
+              {(form.priceTiers || []).map((tier, index) => (
+                <div key={index} className="usk-form-row" style={{ alignItems: "center", marginBottom: 8 }}>
+                  <span className="usk-label" style={{ minWidth: 100, marginBottom: 0 }}>
+                    {index + 1}. falownik
+                  </span>
+                  <input
+                    className="usk-input"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={tier}
+                    onChange={(e) => setTierPrice(index, e.target.value)}
+                    placeholder="np. 3000"
+                  />
+                  {(form.priceTiers || []).length > 1 && (
+                    <button
+                      type="button"
+                      className="usk-btn usk-btn--sm usk-btn--danger-outline"
+                      onClick={() => removeTier(index)}
+                    >
+                      Usuń
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button type="button" className="usk-btn usk-btn--sm" style={{ marginBottom: 16 }} onClick={addTier}>
+                + Kolejna pozycja cennika
+              </button>
 
               <label className="usk-checkbox-label">
                 <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
@@ -521,7 +608,7 @@ function MagazynyTab() {
   const loadFalowniki = useCallback(async () => {
     try {
       const res = await api.get("/kalkulator/falowniki?onlyActive=true");
-      setFalowniki(res.data);
+      setFalowniki(mergeFalownikCatalog(res.data));
     } catch {
       toast.error("Nie udało się pobrać falowników");
     }

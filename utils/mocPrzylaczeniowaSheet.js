@@ -34,6 +34,7 @@ export function computeEffectivePower({
   panelData,
   falownikMocPaneliKw,
   falownikData,
+  falownikIlosc,
   magazynData,
   magazynIlosc,
 }) {
@@ -44,10 +45,12 @@ export function computeEffectivePower({
   const a8 = pvKwp + newPanelsKwp;
 
   const falParsed = parseFloat(String(falownikMocPaneliKw ?? "").replace(",", "."));
-  const b8 =
+  const unitB8 =
     Number.isFinite(falParsed) && falParsed > 0
       ? falParsed
       : Number(falownikData?.powerKw) || 0;
+  const falQty = Math.max(1, parseInt(String(falownikIlosc ?? 1), 10) || 1);
+  const b8 = unitB8 * falQty;
 
   const meSzt = magazynData ? Math.max(1, parseInt(String(magazynIlosc ?? 1), 10) || 1) : 0;
   const unitMeKw =
