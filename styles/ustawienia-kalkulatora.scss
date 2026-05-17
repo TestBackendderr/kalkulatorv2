@@ -416,9 +416,9 @@ $u-radius-sm: 5px;
   margin: 4px 0;
 }
 
-// ─── Przekopy / przewody: 2 kolumny ───────────────────────────────────────────
+// ─── Przewody (ustawienia): 2 kolumny ─────────────────────────────────────────
 
-.usk-przekopy-przewody-layout {
+.usk-przewody-tab-layout {
   display: grid;
   grid-template-columns: minmax(480px, 1.5fr) minmax(280px, 1fr);
   gap: 24px;
@@ -429,10 +429,10 @@ $u-radius-sm: 5px;
   }
 }
 
-.usk-przekopy-przewody-col {
+.usk-przewody-tab-col {
   min-width: 0;
 
-  &--przewody {
+  &--ceny {
     border-left: 1px solid $u-border;
     padding-left: 24px;
 
@@ -463,6 +463,28 @@ $u-radius-sm: 5px;
 .usk-przekop-panel {
   .usk-przekop-block + .usk-przekop-block {
     margin-top: 20px;
+  }
+}
+
+.usk-przekopy-panel {
+  max-width: 720px;
+}
+
+.usk-kopanie-table-wrap {
+  border: 1px solid $u-border;
+  border-radius: $u-radius-sm;
+  overflow-x: auto;
+
+  &--editing {
+    border-color: rgba($u-primary, .35);
+  }
+}
+
+.usk-kopanie-table {
+  .usk-kopanie-zakres-hint {
+    font-size: 11px;
+    color: $u-gray-lt;
+    font-style: italic;
   }
 }
 

@@ -60,35 +60,28 @@ const LS_YKY_MATRIX       = "kalk-przekop-matrix-yky";
 const LS_YAKY_MATRIX      = "kalk-przekop-matrix-yaky";
 const LS_YKY_PRICES       = "kalk-przewod-prices-yky";
 const LS_YAKY_PRICES      = "kalk-przewod-prices-yaky";
-const LS_KOPANIE_TRANSEI  = "kalk-kopanie-transei";
+const LS_KOPANIE_PRZEKOP  = "kalk-kopanie-przekop";
+
+/** Domyślny cennik kopania (zakresy długości → cena netto). */
+export const DEFAULT_KOPANIE_PRZEKOP = [
+  { id: "k1", odMetrow: 0,  doMetrow: 10, priceNetto: 700 },
+  { id: "k2", odMetrow: 10, doMetrow: 20, priceNetto: 1000 },
+  { id: "k3", odMetrow: 20, doMetrow: 30, priceNetto: 1400 },
+  { id: "k4", odMetrow: 30, doMetrow: 40, priceNetto: 1700 },
+  { id: "k5", odMetrow: 40, doMetrow: 50, priceNetto: 2000 },
+  { id: "k6", odMetrow: 50, doMetrow: 80, priceNetto: 2600 },
+];
+
+export function formatKopanieZakres(odMetrow, doMetrow) {
+  const from = Number(odMetrow);
+  const to = Number(doMetrow);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return "—";
+  if (from === 0) return `Do ${to} m`;
+  return `${from}–${to} m`;
+}
 
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
-}
-
-function mergeMatrix(defaults, saved) {
-  const out = deepClone(defaults);
-  if (!saved || typeof saved !== "object") return out;
-  for (const rowId of Object.keys(out)) {
-    if (!saved[rowId]) continue;
-    for (const kwp of PRZEKOP_POWER_KWP) {
-      if (saved[rowId][kwp] !== undefined) {
-        out[rowId][kwp] = saved[rowId][kwp] ?? "";
-      }
-    }
-  }
-  return out;
-}
-
-function mergePrices(defaults, saved) {
-  const out = { ...defaults };
-  if (!saved || typeof saved !== "object") return out;
-  for (const key of Object.keys(out)) {
-    if (saved[key] !== undefined && saved[key] !== null && saved[key] !== "") {
-      out[key] = Number(saved[key]);
-    }
-  }
-  return out;
 }
 
 function readJson(key) {
@@ -102,19 +95,27 @@ function readJson(key) {
 }
 
 export function loadYkyMatrix() {
-  return mergeMatrix(DEFAULT_YKY_MATRIX, readJson(LS_YKY_MATRIX));
+  const saved = readJson(LS_YKY_MATRIX);
+  if (saved === null) return deepClone(DEFAULT_YKY_MATRIX);
+  return typeof saved === "object" ? saved : deepClone(DEFAULT_YKY_MATRIX);
 }
 
 export function loadYakyMatrix() {
-  return mergeMatrix(DEFAULT_YAKY_MATRIX, readJson(LS_YAKY_MATRIX));
+  const saved = readJson(LS_YAKY_MATRIX);
+  if (saved === null) return deepClone(DEFAULT_YAKY_MATRIX);
+  return typeof saved === "object" ? saved : deepClone(DEFAULT_YAKY_MATRIX);
 }
 
 export function loadYkyPrices() {
-  return mergePrices(DEFAULT_YKY_PRICES, readJson(LS_YKY_PRICES));
+  const saved = readJson(LS_YKY_PRICES);
+  if (saved === null) return deepClone(DEFAULT_YKY_PRICES);
+  return typeof saved === "object" ? saved : deepClone(DEFAULT_YKY_PRICES);
 }
 
 export function loadYakyPrices() {
-  return mergePrices(DEFAULT_YAKY_PRICES, readJson(LS_YAKY_PRICES));
+  const saved = readJson(LS_YAKY_PRICES);
+  if (saved === null) return deepClone(DEFAULT_YAKY_PRICES);
+  return typeof saved === "object" ? saved : deepClone(DEFAULT_YAKY_PRICES);
 }
 
 export function saveYkyMatrix(matrix) {
@@ -141,27 +142,54 @@ export function saveYakyPrices(prices) {
   }
 }
 
-/**
- * Saves kopanie transei ranges from API to localStorage.
- * ranges: [{ odMetrow, doMetrow, priceNetto }] sorted by odMetrow
- */
-export function saveKopanieTransei(ranges) {
+/** Zapis cennika kopania (frontend / localStorage). */
+export function saveKopaniePrzekop(ranges) {
   if (typeof window !== "undefined") {
-    localStorage.setItem(LS_KOPANIE_TRANSEI, JSON.stringify(ranges));
+    localStorage.setItem(LS_KOPANIE_PRZEKOP, JSON.stringify(ranges));
   }
 }
 
-export function loadKopanieTransei() {
+/** @deprecated alias */
+export function saveKopanieTransei(ranges) {
+  saveKopaniePrzekop(ranges);
+}
+
+export function loadKopaniePrzekop() {
+  if (typeof window === "undefined") return deepClone(DEFAULT_KOPANIE_PRZEKOP);
+  const raw = localStorage.getItem(LS_KOPANIE_PRZEKOP);
+  if (raw === null) return deepClone(DEFAULT_KOPANIE_PRZEKOP);
   try {
-    const raw = typeof window !== "undefined"
-      ? localStorage.getItem(LS_KOPANIE_TRANSEI)
-      : null;
-    if (!raw) return null;
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : null;
+    const saved = JSON.parse(raw);
+    if (!Array.isArray(saved)) return [];
+    return saved.map((r, i) => ({
+      id: r.id ?? `k${i}`,
+      odMetrow: Number(r.odMetrow) ?? 0,
+      doMetrow: Number(r.doMetrow) ?? 0,
+      priceNetto: Number(r.priceNetto) ?? 0,
+      isActive: r.isActive !== false,
+    }));
   } catch {
-    return null;
+    return [];
   }
+}
+
+/** Zapisuje aktywne zakresy do cache (localStorage) — po pobraniu z API. */
+export function syncKopaniePrzekopCache(ranges) {
+  const active = (ranges || []).filter((r) => r.isActive !== false);
+  saveKopaniePrzekop(active);
+}
+
+function matchesKopanieRange(odMetrow, doMetrow, metraz) {
+  const from = Number(odMetrow);
+  const to = Number(doMetrow);
+  const m = Number(metraz);
+  if (from === 0) return m >= 0 && m <= to;
+  return m > from && m <= to;
+}
+
+/** @deprecated alias */
+export function loadKopanieTransei() {
+  return loadKopaniePrzekop();
 }
 
 /** Zwraca etykietę przewodu YKY dla długości (m) i mocy (kWp). */
@@ -214,37 +242,19 @@ export function snapPowerKwp(kwp) {
   return cols[cols.length - 1];
 }
 
-/** Usługa kopania (netto) wg długości przekopu [m]. */
+/** Usługa kopania (netto) wg długości przekopu [m] — logika jak w backendzie. */
 export function calcKopaniePrzekop(metry) {
   const m = Number(metry) || 0;
   if (m <= 0) return 0;
 
-  // prefer API data synced to localStorage
-  const ranges = loadKopanieTransei();
-  if (ranges && ranges.length > 0) {
-    const sorted = [...ranges]
-      .filter((r) => r.isActive !== false)
-      .sort((a, b) => Number(a.odMetrow) - Number(b.odMetrow));
+  const sorted = loadKopaniePrzekop()
+    .filter((r) => r.isActive !== false)
+    .sort((a, b) => Number(a.odMetrow) - Number(b.odMetrow));
 
-    // find the range: odMetrow < m <= doMetrow
-    for (const r of sorted) {
-      const from = Number(r.odMetrow);
-      const to = Number(r.doMetrow);
-      if (m > from && m <= to) return Number(r.priceNetto) || 0;
-    }
-    // beyond last range — use last range price
-    const last = sorted[sorted.length - 1];
-    if (last && m > Number(last.odMetrow)) return Number(last.priceNetto) || 0;
-    return 0;
-  }
-
-  // fallback to hardcoded defaults
-  if (m <= 10) return 700;
-  if (m <= 20) return 1000;
-  if (m <= 30) return 1400;
-  if (m <= 40) return 1700;
-  if (m <= 50) return 2000;
-  return 2600;
+  const match = sorted.find((r) =>
+    matchesKopanieRange(r.odMetrow, r.doMetrow, m),
+  );
+  return match ? Number(match.priceNetto) || 0 : 0;
 }
 
 export function getCablePriceForType(cableLabel, cableType) {

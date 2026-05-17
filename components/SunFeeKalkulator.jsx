@@ -11,16 +11,17 @@ import { computeEffectivePower } from "@/utils/mocPrzylaczeniowaSheet";
 import {
   computePrzekopQuote,
   PRZEKOP_PRZEWOD_LABELS,
+  formatKopanieZakres,
 } from "@/utils/przekopSettings";
+import { syncKalkulatorCatalogFromApi } from "@/utils/kalkulatorCatalogSync";
 import { computeMagazynLine, formatTierBreakdown, normalizePriceTiers } from "@/utils/magazynPricing";
 import {
   computeFalownikLine,
   getFalownikUnitMocKw,
   normalizeFalownikRecord,
 } from "@/utils/falownikPricing";
-// Legacy fallback — used only if API returns no active types
-const CONSTRUCTION_FALLBACK = { grunt: 450, dach: 350 };
 
+/** Robocizna PV — brak endpointu w API; wartości do czasu dodania w backendzie */
 const LABOR_TIERS = [
   { max: 2,        pricePerPanel: 850 },
   { max: 4,        pricePerPanel: 650 },
@@ -29,12 +30,11 @@ const LABOR_TIERS = [
   { max: Infinity, pricePerPanel: 450 },
 ];
 
+/** Koszty bez osobnych endpointów w API (admin, montaż ME, rozdzielnica) */
 const FIXED = {
-  marketing:     6000,
   admin:         5000,
   montazME:      2000,
   rozdzielnica:  1500,
-  // przekop: przewód + kopanie — see przekopSettings.js
 };
 
 /** Minimalna liczba paneli przy budowie nowego łańcucha */
@@ -43,7 +43,7 @@ const MIN_PANELS_NEW_CHAIN = 7;
 /** Domyślna wartość pola WM (0,1 = +100 zł netto) */
 const DEFAULT_WM = "15";
 
-/** Transport + zamówienie przy panelach spoza listy (jednorazowo) */
+/** Transport paneli spoza listy — brak endpointu w API */
 const CUSTOM_PANEL_TRANSPORT = 500;
 
 /** Automatyczna cena jednostkowa dla paneli spoza listy */
@@ -53,12 +53,6 @@ function calcCustomPanelUnitPrice(powerW) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function laborPrice(count) {
-  const tier = LABOR_TIERS.find((t) => count <= t.max);
-  const ppp  = tier ? tier.pricePerPanel : 450;
-  return count * ppp;
-}
 
 function fmt(n) {
   return new Intl.NumberFormat("pl-PL", {
@@ -185,6 +179,8 @@ export default function SunFeeKalkulator() {
   const [typyMontazuList,    setTypyMontazuList]    = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError,   setCatalogError]   = useState("");
+  const [catalogVersion, setCatalogVersion] = useState(0);
+  const [kopanieRanges,  setKopanieRanges]  = useState([]);
 
   // Step 0 – lead source
   const [selectedLeadSourceId, setSelectedLeadSourceId] = useState(null);
@@ -193,22 +189,19 @@ export default function SunFeeKalkulator() {
     setCatalogLoading(true);
     setCatalogError("");
     try {
-      const [fRes, pRes, mRes, kRes, lsRes, tmRes] = await Promise.all([
-        api.get("/kalkulator/falowniki"),
-        api.get("/kalkulator/panele"),
-        api.get("/kalkulator/magazyny"),
-        api.get("/kalkulator/klimatyzatory"),
-        api.get("/lead-sources?onlyActive=true"),
-        api.get("/typy-montazu?onlyActive=true"),
-      ]);
-      const activeFalowniki = (fRes.data || [])
+      const catalog = await syncKalkulatorCatalogFromApi();
+
+      const activeFalowniki = (catalog.falowniki || [])
         .filter((f) => f.isActive !== false)
         .map(normalizeFalownikRecord);
-      const activePanele    = (pRes.data || []).filter((p) => p.isActive !== false);
-      const activeMagazyny  = (mRes.data || []).filter((m) => m.isActive !== false);
-      const activeKlimatyzatory = (kRes.data || []).filter((k) => k.isActive !== false);
-      const activeSources   = (lsRes.data || []).filter((s) => s.isActive !== false);
-      const activeTypy      = (tmRes.data || []).filter((t) => t.isActive !== false);
+      const activePanele = (catalog.panele || []).filter((p) => p.isActive !== false);
+      const activeMagazyny = (catalog.magazyny || []).filter((m) => m.isActive !== false);
+      const activeKlimatyzatory = (catalog.klimatyzatory || []).filter(
+        (k) => k.isActive !== false,
+      );
+      const activeSources = (catalog.leadSources || []).filter((s) => s.isActive !== false);
+      const activeTypy = (catalog.typyMontazu || []).filter((t) => t.isActive !== false);
+      const activeKopanie = (catalog.kopanieRanges || []).filter((r) => r.isActive !== false);
 
       setFalownikiList(activeFalowniki);
       setPaneleList(activePanele);
@@ -216,10 +209,14 @@ export default function SunFeeKalkulator() {
       setKlimatyzatoryList(activeKlimatyzatory);
       setLeadSources(activeSources);
       setTypyMontazuList(activeTypy);
+      setKopanieRanges(
+        [...activeKopanie].sort((a, b) => Number(a.odMetrow) - Number(b.odMetrow)),
+      );
+      setCatalogVersion((v) => v + 1);
 
-      if (activePanele.length > 0)    setSelectedPanel(activePanele[0].id);
+      if (activePanele.length > 0) setSelectedPanel(activePanele[0].id);
       if (activeFalowniki.length > 0) setSelectedFalownik(activeFalowniki[0].id);
-      if (activeTypy.length > 0)      setMountType(activeTypy[0].id);
+      if (activeTypy.length > 0) setMountType(activeTypy[0].id);
     } catch {
       setCatalogError("Nie udało się załadować danych katalogowych");
     } finally {
@@ -409,6 +406,7 @@ export default function SunFeeKalkulator() {
     falownikIlosc,
     magazynData,
     magazynIlosc,
+    catalogVersion,
   ]);
 
   // ── Calculation ───────────────────────────────────────────────────────────
@@ -429,11 +427,8 @@ export default function SunFeeKalkulator() {
 
     // Panels
     const selectedTypMontazuObj = typyMontazuList.find((t) => t.id === mountType) ?? null;
-    const constructPricePerPanel =
-      selectedTypMontazuObj?.priceNetto ??
-      CONSTRUCTION_FALLBACK[mountType] ??
-      0;
-    const constructLabel = selectedTypMontazuObj?.name ?? mountType ?? "Montaż";
+    const constructPricePerPanel = Number(selectedTypMontazuObj?.priceNetto) || 0;
+    const constructLabel = selectedTypMontazuObj?.name ?? "Montaż";
 
     if (panelOption !== "none" && panelOption !== "" && count > 0 && panelData) {
       const panelCost     = count * panelData.price;
@@ -503,7 +498,7 @@ export default function SunFeeKalkulator() {
     // Fixed — 50% if no energy storage (panels/inverter only)
     const fixedRate = magazynData ? 1 : 0.5;
     const selectedLeadSrc = leadSources.find((s) => s.id === selectedLeadSourceId);
-    const marketingCost = selectedLeadSrc?.marketingCost ?? FIXED.marketing;
+    const marketingCost = Number(selectedLeadSrc?.marketingCost) || 0;
     add(
       `Koszty marketingowe${fixedRate < 1 ? " (50% – brak ME)" : ""}${selectedLeadSrc ? ` – ${selectedLeadSrc.name}` : ""}`,
       marketingCost * fixedRate
@@ -2107,7 +2102,7 @@ export default function SunFeeKalkulator() {
                     ) : (
                       <span style={{ fontSize: 13, color: "#b45309" }}>
                         Brak rekomendowanego przewodu dla podanej mocy instalacji i długości przekopu.
-                        Sprawdź macierz w ustawieniach (Przekopy / przewody).
+                        Sprawdź macierz w ustawieniach (Przewody / Przekopy).
                       </span>
                     )}
                   </div>
@@ -2117,10 +2112,11 @@ export default function SunFeeKalkulator() {
                   <div className="kalk-info-box" style={{ marginTop: 10, fontSize: 12 }}>
                     <strong>Cennik kopania</strong>
                     <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
-                      <li>1–10 m: 700 zł + 30 zł/m</li>
-                      <li>11–25 m: 1 000 zł + 35 zł/m</li>
-                      <li>26–50 m: 1 700 zł</li>
-                      <li>&gt;50 m: 1 700 zł + 35 zł za każdy metr powyżej 50 m</li>
+                      {kopanieRanges.map((r) => (
+                        <li key={r.id}>
+                          {formatKopanieZakres(r.odMetrow, r.doMetrow)} — {fmt(r.priceNetto)} zł
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 )}

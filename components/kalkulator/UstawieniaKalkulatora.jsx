@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
-import { PrzekopUstawieniaPanel, PrzewodyCenyPanel, KopanieTranseiPanel } from "@/components/kalkulator/PrzekopPrzewodyUstawienia";
+import { PrzekopUstawieniaPanel, PrzewodyCenyPanel } from "@/components/kalkulator/PrzekopPrzewodyUstawienia";
+import PrzekopyPanel from "@/components/kalkulator/PrzekopyUstawienia";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -12,7 +13,8 @@ const TABS = [
   { key: "klimatyzatory",  label: "Klimatyzatory" },
   { key: "lead-sources",   label: "Koszty marketingowe" },
   { key: "typy-montazu",       label: "Typy montażu" },
-  { key: "przekopy-przewody",  label: "Przekopy / przewody" },
+  { key: "przewody",   label: "Przewody" },
+  { key: "przekopy",   label: "Przekopy" },
 ];
 
 const EMPTY_FALOWNIK = {
@@ -1186,16 +1188,15 @@ function TypMontazuTab() {
   );
 }
 
-// ─── Przekopy / przewody tab ──────────────────────────────────────────────────
+// ─── Przewody tab ─────────────────────────────────────────────────────────────
 
-function PrzekopyPrzewodyTab() {
+function PrzewodyTab() {
   return (
-    <div className="usk-przekopy-przewody-layout">
-      <div className="usk-przekopy-przewody-col usk-przekopy-przewody-col--przekop">
+    <div className="usk-przewody-tab-layout">
+      <div className="usk-przewody-tab-col usk-przewody-tab-col--macierz">
         <PrzekopUstawieniaPanel />
-        <KopanieTranseiPanel />
       </div>
-      <div className="usk-przekopy-przewody-col usk-przekopy-przewody-col--przewody">
+      <div className="usk-przewody-tab-col usk-przewody-tab-col--ceny">
         <PrzewodyCenyPanel />
       </div>
     </div>
@@ -1413,14 +1414,15 @@ export default function UstawieniaKalkulatora() {
         ))}
       </div>
 
-      <div className={`usk-tab-content${activeTab === "przekopy-przewody" ? " usk-tab-content--wide" : ""}`}>
+      <div className={`usk-tab-content${activeTab === "przewody" || activeTab === "przekopy" ? " usk-tab-content--wide" : ""}`}>
         {activeTab === "falowniki"         && <FalownikiTab />}
         {activeTab === "panele"            && <PaneleTab />}
         {activeTab === "magazyny"           && <MagazynyTab />}
         {activeTab === "klimatyzatory"      && <KlimatyzatoryTab />}
         {activeTab === "lead-sources"       && <LeadSourcesTab />}
         {activeTab === "typy-montazu"       && <TypMontazuTab />}
-        {activeTab === "przekopy-przewody"  && <PrzekopyPrzewodyTab />}
+        {activeTab === "przewody"           && <PrzewodyTab />}
+        {activeTab === "przekopy"           && <PrzekopyPanel />}
       </div>
     </div>
   );
