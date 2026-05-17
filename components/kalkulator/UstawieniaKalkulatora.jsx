@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
-import { PrzekopUstawieniaPanel, PrzewodyCenyPanel } from "@/components/kalkulator/PrzekopPrzewodyUstawienia";
+import { PrzekopUstawieniaPanel, PrzewodyCenyPanel, KopanieTranseiPanel } from "@/components/kalkulator/PrzekopPrzewodyUstawienia";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1193,6 +1193,7 @@ function PrzekopyPrzewodyTab() {
     <div className="usk-przekopy-przewody-layout">
       <div className="usk-przekopy-przewody-col usk-przekopy-przewody-col--przekop">
         <PrzekopUstawieniaPanel />
+        <KopanieTranseiPanel />
       </div>
       <div className="usk-przekopy-przewody-col usk-przekopy-przewody-col--przewody">
         <PrzewodyCenyPanel />

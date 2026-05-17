@@ -56,10 +56,11 @@ export const DEFAULT_YAKY_PRICES = {
   "YAKY 5x95": 38.64,
 };
 
-const LS_YKY_MATRIX  = "kalk-przekop-matrix-yky";
-const LS_YAKY_MATRIX = "kalk-przekop-matrix-yaky";
-const LS_YKY_PRICES  = "kalk-przewod-prices-yky";
-const LS_YAKY_PRICES = "kalk-przewod-prices-yaky";
+const LS_YKY_MATRIX       = "kalk-przekop-matrix-yky";
+const LS_YAKY_MATRIX      = "kalk-przekop-matrix-yaky";
+const LS_YKY_PRICES       = "kalk-przewod-prices-yky";
+const LS_YAKY_PRICES      = "kalk-przewod-prices-yaky";
+const LS_KOPANIE_TRANSEI  = "kalk-kopanie-transei";
 
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -140,6 +141,29 @@ export function saveYakyPrices(prices) {
   }
 }
 
+/**
+ * Saves kopanie transei ranges from API to localStorage.
+ * ranges: [{ odMetrow, doMetrow, priceNetto }] sorted by odMetrow
+ */
+export function saveKopanieTransei(ranges) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(LS_KOPANIE_TRANSEI, JSON.stringify(ranges));
+  }
+}
+
+export function loadKopanieTransei() {
+  try {
+    const raw = typeof window !== "undefined"
+      ? localStorage.getItem(LS_KOPANIE_TRANSEI)
+      : null;
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Zwraca etykietę przewodu YKY dla długości (m) i mocy (kWp). */
 export function lookupYkyCable(lengthM, powerKwp) {
   const matrix = loadYkyMatrix();
@@ -194,10 +218,33 @@ export function snapPowerKwp(kwp) {
 export function calcKopaniePrzekop(metry) {
   const m = Number(metry) || 0;
   if (m <= 0) return 0;
-  if (m <= 10) return 700 + m * 30;
-  if (m <= 25) return 1000 + m * 35;
-  if (m <= 50) return 1700;
-  return 1700 + (m - 50) * 35;
+
+  // prefer API data synced to localStorage
+  const ranges = loadKopanieTransei();
+  if (ranges && ranges.length > 0) {
+    const sorted = [...ranges]
+      .filter((r) => r.isActive !== false)
+      .sort((a, b) => Number(a.odMetrow) - Number(b.odMetrow));
+
+    // find the range: odMetrow < m <= doMetrow
+    for (const r of sorted) {
+      const from = Number(r.odMetrow);
+      const to = Number(r.doMetrow);
+      if (m > from && m <= to) return Number(r.priceNetto) || 0;
+    }
+    // beyond last range — use last range price
+    const last = sorted[sorted.length - 1];
+    if (last && m > Number(last.odMetrow)) return Number(last.priceNetto) || 0;
+    return 0;
+  }
+
+  // fallback to hardcoded defaults
+  if (m <= 10) return 700;
+  if (m <= 20) return 1000;
+  if (m <= 30) return 1400;
+  if (m <= 40) return 1700;
+  if (m <= 50) return 2000;
+  return 2600;
 }
 
 export function getCablePriceForType(cableLabel, cableType) {

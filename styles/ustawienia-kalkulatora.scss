@@ -466,6 +466,18 @@ $u-radius-sm: 5px;
   }
 }
 
+.usk-kopanie-transei-panel {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid $u-border;
+
+  .usk-kopanie-zakres {
+    font-weight: 600;
+    color: $u-dark;
+    white-space: nowrap;
+  }
+}
+
 .usk-przekop-block-head {
   display: flex;
   align-items: flex-start;
