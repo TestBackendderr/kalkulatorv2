@@ -14,7 +14,8 @@ import {
   getFalownikUnitMocKw,
   normalizeFalownikRecord,
 } from "@/utils/falownikPricing";
-const CONSTRUCTION = { grunt: 450, dach: 350 };
+// Legacy fallback — used only if API returns no active types
+const CONSTRUCTION_FALLBACK = { grunt: 450, dach: 350 };
 
 const LABOR_TIERS = [
   { max: 2,        pricePerPanel: 850 },
@@ -202,6 +203,7 @@ export default function SunFeeKalkulator() {
   const [magazynyList,       setMagazynyList]       = useState([]);
   const [klimatyzatoryList,  setKlimatyzatoryList]  = useState([]);
   const [leadSources,        setLeadSources]        = useState([]);
+  const [typyMontazuList,    setTypyMontazuList]    = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError,   setCatalogError]   = useState("");
 
@@ -212,12 +214,13 @@ export default function SunFeeKalkulator() {
     setCatalogLoading(true);
     setCatalogError("");
     try {
-      const [fRes, pRes, mRes, kRes, lsRes] = await Promise.all([
+      const [fRes, pRes, mRes, kRes, lsRes, tmRes] = await Promise.all([
         api.get("/kalkulator/falowniki"),
         api.get("/kalkulator/panele"),
         api.get("/kalkulator/magazyny"),
         api.get("/kalkulator/klimatyzatory"),
         api.get("/lead-sources?onlyActive=true"),
+        api.get("/typy-montazu?onlyActive=true"),
       ]);
       const activeFalowniki = (fRes.data || [])
         .filter((f) => f.isActive !== false)
@@ -226,15 +229,18 @@ export default function SunFeeKalkulator() {
       const activeMagazyny  = (mRes.data || []).filter((m) => m.isActive !== false);
       const activeKlimatyzatory = (kRes.data || []).filter((k) => k.isActive !== false);
       const activeSources   = (lsRes.data || []).filter((s) => s.isActive !== false);
+      const activeTypy      = (tmRes.data || []).filter((t) => t.isActive !== false);
 
       setFalownikiList(activeFalowniki);
       setPaneleList(activePanele);
       setMagazynyList(activeMagazyny);
       setKlimatyzatoryList(activeKlimatyzatory);
       setLeadSources(activeSources);
+      setTypyMontazuList(activeTypy);
 
       if (activePanele.length > 0)    setSelectedPanel(activePanele[0].id);
       if (activeFalowniki.length > 0) setSelectedFalownik(activeFalowniki[0].id);
+      if (activeTypy.length > 0)      setMountType(activeTypy[0].id);
     } catch {
       setCatalogError("Nie udało się załadować danych katalogowych");
     } finally {
@@ -260,7 +266,7 @@ export default function SunFeeKalkulator() {
   const [customPanelNazwa, setCustomPanelNazwa] = useState("");
   const [customPanelPrice, setCustomPanelPrice] = useState("");
   const [panelCount,       setPanelCount]       = useState("");
-  const [mountType,        setMountType]        = useState("dach");
+  const [mountType,        setMountType]        = useState(null); // ID of selected TypMontazu
 
   // Step 2 – inverter
   const [falownikAction,   setFalownikAction]   = useState("");
@@ -409,14 +415,21 @@ export default function SunFeeKalkulator() {
     };
 
     // Panels
+    const selectedTypMontazuObj = typyMontazuList.find((t) => t.id === mountType) ?? null;
+    const constructPricePerPanel =
+      selectedTypMontazuObj?.priceNetto ??
+      CONSTRUCTION_FALLBACK[mountType] ??
+      0;
+    const constructLabel = selectedTypMontazuObj?.name ?? mountType ?? "Montaż";
+
     if (panelOption !== "none" && panelOption !== "" && count > 0 && panelData) {
       const panelCost     = count * panelData.price;
-      const constructCost = count * CONSTRUCTION[mountType];
+      const constructCost = count * constructPricePerPanel;
       const ppp           = LABOR_TIERS.find((t) => count <= t.max)?.pricePerPanel ?? 450;
       const labor         = count * ppp;
 
       add(`Panele (${count} × ${fmt(panelData.price)} zł)`, panelCost);
-      add(`Konstrukcja – ${mountType} (${count} × ${fmt(CONSTRUCTION[mountType])} zł)`, constructCost);
+      add(`Konstrukcja – ${constructLabel} (${count} × ${fmt(constructPricePerPanel)} zł)`, constructCost);
       add(`Robocizna PV (${count} × ${fmt(ppp)} zł/panel)`, labor);
 
       if (panelSource === "custom") {
@@ -518,6 +531,7 @@ export default function SunFeeKalkulator() {
   }, [
     existingPvKwp, connectionKw, wm,
     panelOption, panelData, panelCount, mountType, panelSource,
+    typyMontazuList,
     falownikAction, falownikData, falownikLine, falownikMocPaneliKw, falownikSource, falownikIlosc,
     magazynData, magazynIlosc, magazynLine,
     rozdzielnica,
@@ -758,7 +772,8 @@ export default function SunFeeKalkulator() {
           opcja:      panelOption,
           zrodlo:     panelOption !== "none" ? panelSource : null,
           liczba:     panelOption !== "none" ? (parseInt(panelCount, 10) || 0) : 0,
-          typMontazu: panelOption !== "none" ? mountType : null,
+          typMontazuId:   panelOption !== "none" ? mountType : null,
+          typMontazuName: panelOption !== "none" ? (typyMontazuList.find((t) => t.id === mountType)?.name ?? null) : null,
           panel: panelOption !== "none" && panelSource === "list"
             ? { id: selectedPanel, nazwa: panelData?.name, mocW: panelData?.powerW, cenaNetto: panelData?.price }
             : null,
@@ -886,7 +901,7 @@ export default function SunFeeKalkulator() {
         connectionKw,
         panelOption,
         panelCount,
-        mountType,
+        mountType: typyMontazuList.find((t) => t.id === mountType)?.name ?? mountType ?? "",
         panelData,
         falownikAction,
         falownikData:
@@ -957,7 +972,7 @@ export default function SunFeeKalkulator() {
     setExistingPvKwp(""); setExistingMePowerKw(""); setExistingMeCapacityKwh(""); setConnectionKw("");
     setWm(DEFAULT_WM); setPanelOption(""); setPanelSource("list");
     setSelectedPanel(paneleList[0]?.id ?? null); setCustomPanelW(""); setCustomPanelNazwa(""); setCustomPanelPrice("");
-    setPanelCount(""); setMountType("dach");
+    setPanelCount(""); setMountType(typyMontazuList[0]?.id ?? null);
     setFalownikAction(""); setFalownikSource("list"); setSelectedFalownik(falownikiList[0]?.id ?? null);
     setMagazynId("none");
     setMagazynIlosc("1");
@@ -989,7 +1004,7 @@ export default function SunFeeKalkulator() {
           new_chain: "Dokładamy nowego łańcucha",
         }[panelOption] || "—");
 
-    const mountLabel = mountType === "grunt" ? "Grunt" : "Dach";
+    const mountLabel = typyMontazuList.find((t) => t.id === mountType)?.name ?? mountType ?? "—";
 
     const selectedPanelObj = panelSource === "custom"
       ? null
@@ -1576,10 +1591,19 @@ export default function SunFeeKalkulator() {
                   </div>
                   <div className="kalk-col">
                     <label className="kalk-label kalk-label--sm">Typ montażu</label>
-                    <select className="kalk-select" value={mountType}
-                      onChange={(e) => setMountType(e.target.value)}>
-                      <option value="dach">{showAllPrices ? `Dach – ${fmt(CONSTRUCTION.dach)} zł/panel` : "Dach"}</option>
-                      <option value="grunt">{showAllPrices ? `Grunt – ${fmt(CONSTRUCTION.grunt)} zł/panel` : "Grunt"}</option>
+                    <select
+                      className="kalk-select"
+                      value={mountType ?? ""}
+                      onChange={(e) => setMountType(Number(e.target.value) || e.target.value)}
+                    >
+                      {typyMontazuList.length === 0 && (
+                        <option value="">Brak typów montażu</option>
+                      )}
+                      {typyMontazuList.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {showAllPrices ? `${t.name} – ${fmt(t.priceNetto)} zł/panel` : t.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

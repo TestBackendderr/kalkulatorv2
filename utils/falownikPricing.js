@@ -6,6 +6,7 @@ import {
   normalizePriceTiers,
   getTierUnitPrices,
   formatTierBreakdown,
+  formatTierCatalogLines,
 } from "./magazynPricing";
 
 export { normalizePriceTiers, formatTierBreakdown };
@@ -46,13 +47,5 @@ export function normalizeFalownikRecord(falownik) {
 }
 
 export function formatFalownikTierCatalogLines(falownik, fmt, maxLines = 12) {
-  const tiers = normalizePriceTiers(falownik);
-  const limit = Math.min(tiers.length, maxLines);
-  return tiers.slice(0, limit).map((price, index) => ({
-    position: index + 1,
-    price,
-    label: fmt
-      ? `${index + 1}. falownik — ${fmt(price)} zł`
-      : `${index + 1}. falownik — ${price} zł`,
-  }));
+  return formatTierCatalogLines(falownik, fmt, maxLines, "falownik");
 }
