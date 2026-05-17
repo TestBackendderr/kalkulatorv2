@@ -185,6 +185,12 @@ export function buildPdfContextFromSavedRecord(record, showAllPrices) {
     rozdzielnica: k.rozdzielnica || "nie",
     przekop: k.przekop || "nie",
     przekopMetry: String(k.przekopMetry ?? ""),
+    przekopPrzewodTyp: k.przekopPrzewodTyp ?? null,
+    przekopPrzewod: k.przekopPrzewod ?? null,
+    przekopMocKwp: k.mocPvKwp != null ? String(k.mocPvKwp) : null,
+    przewodCenaZaMetr: k.przewodCenaZaMetr ?? null,
+    przewodKwotaNetto: k.przewodKwotaNetto ?? null,
+    kopanieKwotaNetto: k.kopanieKwotaNetto ?? null,
     klimatyzatorMontaz: k.klimatyzator?.montaz || "nie",
     klimatyzatorUrzadzenia: k.klimatyzator?.urzadzenia || [],
     wm: String(p.wm ?? ""),
@@ -314,6 +320,12 @@ export async function renderKalkulatorWycenaPdfAndSave(ctx) {
     rozdzielnica,
     przekop,
     przekopMetry,
+    przekopPrzewodTyp,
+    przekopPrzewod,
+    przekopMocKwp,
+    przewodCenaZaMetr,
+    przewodKwotaNetto,
+    kopanieKwotaNetto,
     klimatyzatorMontaz,
     klimatyzatorUrzadzenia,
     panelOption,
@@ -481,7 +493,23 @@ export async function renderKalkulatorWycenaPdfAndSave(ctx) {
   // Krok 5 (lub 4): Koszty Dodatkowe
   krokHd(`Krok ${krokN}: Koszty Dodatkowe`);
   krokLine(`Przebudowa rozdzielnicy: ${rozdzielnica === "tak" ? "TAK" : "NIE"}`);
-  krokLine(`Przekop: ${przekop === "tak" ? `TAK - ${przekopMetry} mb` : "NIE"}`);
+  krokLine(`Przekop: ${przekop === "tak" ? `TAK - ${przekopMetry} m` : "NIE"}`);
+  if (przekop === "tak" && przekopPrzewodTyp) {
+    const typLabel =
+      przekopPrzewodTyp === "miedz" ? "miedziany (YKY)" : "aluminiowy (YAKY)";
+    krokLine(`  Typ przewodu: ${typLabel}`);
+    if (przekopPrzewod) krokLine(`  Przewód: ${przekopPrzewod}`);
+    if (przekopMocKwp != null && przekopMocKwp !== "")
+      krokLine(`  Moc instalacji PV: ${przekopMocKwp} kWp`);
+    if (showAllPrices) {
+      if (przewodKwotaNetto != null)
+        krokLine(
+          `  Koszt przewodu: ${fmtPdf(przewodKwotaNetto)} zł netto${przewodCenaZaMetr != null ? ` (${fmtPdf(przewodCenaZaMetr)} zł/m × ${przekopMetry} m)` : ""}`,
+        );
+      if (kopanieKwotaNetto != null)
+        krokLine(`  Kopanie: ${fmtPdf(kopanieKwotaNetto)} zł netto`);
+    }
+  }
   krokLine(`Klimatyzator: ${klimatyzatorMontaz === "tak" ? "TAK" : "NIE"}`);
   if (klimatyzatorMontaz === "tak" && Array.isArray(klimatyzatorUrzadzenia)) {
     klimatyzatorUrzadzenia.forEach((u) => {
@@ -971,6 +999,8 @@ export function buildPdfContextFromLiveCalculator({
   rozdzielnica,
   przekop,
   przekopMetry,
+  przekopPrzewodTyp,
+  przekopQuote,
   klimatyzatorMontaz,
   klimatyzatorUrzadzenia,
   wm,
@@ -1034,6 +1064,13 @@ export function buildPdfContextFromLiveCalculator({
     rozdzielnica,
     przekop,
     przekopMetry,
+    przekopPrzewodTyp: przekopPrzewodTyp ?? null,
+    przekopPrzewod: przekopQuote?.cableLabel ?? null,
+    przekopMocKwp:
+      przekopQuote?.powerKwpActual != null ? String(przekopQuote.powerKwpActual) : null,
+    przewodCenaZaMetr: przekopQuote?.pricePerM ?? null,
+    przewodKwotaNetto: przekopQuote?.cableCost ?? null,
+    kopanieKwotaNetto: przekopQuote?.kopanieCost ?? null,
     klimatyzatorMontaz: klimatyzatorMontaz || "nie",
     klimatyzatorUrzadzenia: klimatyzatorUrzadzenia || [],
     wm,

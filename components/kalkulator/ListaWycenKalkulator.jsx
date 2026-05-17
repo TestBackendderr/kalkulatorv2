@@ -146,7 +146,13 @@ function DetailModal({ id, onClose }) {
             <table className="lwk-detail-table"><tbody>
               <tr><td>Rozdzielnica</td><td>{d?.kosztDodatkowe?.rozdzielnica === "tak" ? "TAK" : "NIE"}</td></tr>
               <tr><td>Przekop</td><td>
-                {d?.kosztDodatkowe?.przekop === "tak" ? `TAK – ${d.kosztDodatkowe.przekopMetry} mb` : "NIE"}
+                {d?.kosztDodatkowe?.przekop === "tak"
+                  ? `TAK – ${d.kosztDodatkowe.przekopMetry} m${
+                      d.kosztDodatkowe.przekopPrzewod
+                        ? `, ${d.kosztDodatkowe.przekopPrzewod}`
+                        : ""
+                    }`
+                  : "NIE"}
               </td></tr>
               <tr><td>Klimatyzator</td><td>
                 {d?.kosztDodatkowe?.klimatyzator?.montaz === "tak"

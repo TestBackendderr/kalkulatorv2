@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
+import { PrzekopUstawieniaPanel, PrzewodyCenyPanel } from "@/components/kalkulator/PrzekopPrzewodyUstawienia";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -10,7 +11,8 @@ const TABS = [
   { key: "magazyny",       label: "Magazyny energii" },
   { key: "klimatyzatory",  label: "Klimatyzatory" },
   { key: "lead-sources",   label: "Koszty marketingowe" },
-  { key: "typy-montazu",   label: "Typy montażu" },
+  { key: "typy-montazu",       label: "Typy montażu" },
+  { key: "przekopy-przewody",  label: "Przekopy / przewody" },
 ];
 
 const EMPTY_FALOWNIK = {
@@ -1184,6 +1186,21 @@ function TypMontazuTab() {
   );
 }
 
+// ─── Przekopy / przewody tab ──────────────────────────────────────────────────
+
+function PrzekopyPrzewodyTab() {
+  return (
+    <div className="usk-przekopy-przewody-layout">
+      <div className="usk-przekopy-przewody-col usk-przekopy-przewody-col--przekop">
+        <PrzekopUstawieniaPanel />
+      </div>
+      <div className="usk-przekopy-przewody-col usk-przekopy-przewody-col--przewody">
+        <PrzewodyCenyPanel />
+      </div>
+    </div>
+  );
+}
+
 // ─── Lead Sources (Koszty marketingowe) tab ───────────────────────────────────
 
 const EMPTY_LEAD_SOURCE = { name: "", marketingCost: "", isActive: true };
@@ -1395,13 +1412,14 @@ export default function UstawieniaKalkulatora() {
         ))}
       </div>
 
-      <div className="usk-tab-content">
-        {activeTab === "falowniki"    && <FalownikiTab />}
-        {activeTab === "panele"       && <PaneleTab />}
-        {activeTab === "magazyny"      && <MagazynyTab />}
-        {activeTab === "klimatyzatory" && <KlimatyzatoryTab />}
-        {activeTab === "lead-sources"  && <LeadSourcesTab />}
-        {activeTab === "typy-montazu"  && <TypMontazuTab />}
+      <div className={`usk-tab-content${activeTab === "przekopy-przewody" ? " usk-tab-content--wide" : ""}`}>
+        {activeTab === "falowniki"         && <FalownikiTab />}
+        {activeTab === "panele"            && <PaneleTab />}
+        {activeTab === "magazyny"           && <MagazynyTab />}
+        {activeTab === "klimatyzatory"      && <KlimatyzatoryTab />}
+        {activeTab === "lead-sources"       && <LeadSourcesTab />}
+        {activeTab === "typy-montazu"       && <TypMontazuTab />}
+        {activeTab === "przekopy-przewody"  && <PrzekopyPrzewodyTab />}
       </div>
     </div>
   );

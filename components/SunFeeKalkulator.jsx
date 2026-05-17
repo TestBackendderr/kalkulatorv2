@@ -8,6 +8,10 @@ import {
   renderKalkulatorWycenaPdfAndSave,
 } from "@/utils/kalkulatorWycenaPdf";
 import { computeEffectivePower } from "@/utils/mocPrzylaczeniowaSheet";
+import {
+  computePrzekopQuote,
+  PRZEKOP_PRZEWOD_LABELS,
+} from "@/utils/przekopSettings";
 import { computeMagazynLine, formatTierBreakdown, normalizePriceTiers } from "@/utils/magazynPricing";
 import {
   computeFalownikLine,
@@ -30,33 +34,8 @@ const FIXED = {
   admin:         5000,
   montazME:      2000,
   rozdzielnica:  1500,
-  // przekop prices are range-based — see calcPrzekop()
+  // przekop: przewód + kopanie — see przekopSettings.js
 };
-
-/**
- * Przekop cost based on range:
- *   Robocizna (jednorazowa): 1–10 m → 700 zł | 10–25 m → 1 000 zł | 25–50 m → 1 300 zł
- *   Materiał (za metr):      1–10 m → 30 zł  | 10–25 m → 35 zł    | 25–50 m → 40 zł
- */
-function calcPrzekop(metry) {
-  if (metry <= 0) return 0;
-  let jednorazowa, perM;
-  if (metry <= 10) {
-    jednorazowa = 700;  perM = 30;
-  } else if (metry <= 25) {
-    jednorazowa = 1000; perM = 35;
-  } else {
-    jednorazowa = 1300; perM = 40;
-  }
-  return jednorazowa + metry * perM;
-}
-
-function przekopLabel(metry) {
-  if (metry <= 0) return "";
-  if (metry <= 10)  return `${metry} m (700 + ${metry}×30)`;
-  if (metry <= 25)  return `${metry} m (1 000 + ${metry}×35)`;
-  return                  `${metry} m (1 300 + ${metry}×40)`;
-}
 
 /** Minimalna liczba paneli przy budowie nowego łańcucha */
 const MIN_PANELS_NEW_CHAIN = 7;
@@ -294,8 +273,9 @@ export default function SunFeeKalkulator() {
 
   // Step 4 – additional costs
   const [rozdzielnica, setRozdzielnica] = useState("");
-  const [przekop,      setPrzekop]      = useState("");
-  const [przekopMetry, setPrzekopMetry] = useState("");
+  const [przekop,           setPrzekop]           = useState("");
+  const [przekopMetry,      setPrzekopMetry]      = useState("");
+  const [przekopPrzewodTyp, setPrzekopPrzewodTyp] = useState("");
   const [klimatyzatorMontaz, setKlimatyzatorMontaz] = useState("");
   const [selectedKlimatyzatorIds, setSelectedKlimatyzatorIds] = useState([]);
 
@@ -398,6 +378,39 @@ export default function SunFeeKalkulator() {
     paneleList,
   ]);
 
+  const przekopQuote = useMemo(() => {
+    if (przekop !== "tak" || !przekopPrzewodTyp) return null;
+    const metry = parseInt(przekopMetry, 10) || 0;
+    if (metry < 1) return null;
+    const { a8 } = computeEffectivePower({
+      existingPvKwp,
+      panelCount,
+      panelData,
+      falownikMocPaneliKw,
+      falownikData,
+      falownikIlosc,
+      magazynData,
+      magazynIlosc,
+    });
+    return computePrzekopQuote({
+      lengthM: metry,
+      powerKwp: a8,
+      cableType: przekopPrzewodTyp,
+    });
+  }, [
+    przekop,
+    przekopMetry,
+    przekopPrzewodTyp,
+    existingPvKwp,
+    panelCount,
+    panelData,
+    falownikMocPaneliKw,
+    falownikData,
+    falownikIlosc,
+    magazynData,
+    magazynIlosc,
+  ]);
+
   // ── Calculation ───────────────────────────────────────────────────────────
 
   const calc = useMemo(() => {
@@ -471,10 +484,13 @@ export default function SunFeeKalkulator() {
       add("Przebudowa rozdzielnicy", FIXED.rozdzielnica);
     }
 
-    // Przekop
-    const metry = parseInt(przekopMetry, 10) || 0;
-    if (przekop === "tak") {
-      add(`Przekop ${przekopLabel(metry)}`, calcPrzekop(metry));
+    // Przekop — przewód + kopanie
+    if (przekop === "tak" && przekopQuote?.isValid) {
+      add(
+        `Przewód ${przekopQuote.cableLabel} (${przekopQuote.lengthM} m × ${fmt(przekopQuote.pricePerM)} zł)`,
+        przekopQuote.cableCost,
+      );
+      add(`Kopanie – przekop ${przekopQuote.lengthM} m`, przekopQuote.kopanieCost);
     }
 
     if (klimatyzatorMontaz === "tak") {
@@ -535,7 +551,7 @@ export default function SunFeeKalkulator() {
     falownikAction, falownikData, falownikLine, falownikMocPaneliKw, falownikSource, falownikIlosc,
     magazynData, magazynIlosc, magazynLine,
     rozdzielnica,
-    przekop, przekopMetry,
+    przekop, przekopMetry, przekopQuote,
     klimatyzatorMontaz, selectedKlimatyzatorIds, klimatyzatoryList,
     selectedLeadSourceId, leadSources,
   ]);
@@ -637,7 +653,11 @@ export default function SunFeeKalkulator() {
     }
     if (step === 4) {
       if (rozdzielnica === "" || przekop === "") return false;
-      if (przekop === "tak" && (!przekopMetry || parseInt(przekopMetry, 10) < 1)) return false;
+      if (przekop === "tak") {
+        if (!przekopMetry || parseInt(przekopMetry, 10) < 1) return false;
+        if (!przekopPrzewodTyp) return false;
+        if (!przekopQuote?.isValid) return false;
+      }
       if (klimatyzatorMontaz === "") return false;
       if (klimatyzatorMontaz === "tak" && selectedKlimatyzatorIds.length === 0) return false;
       return true;
@@ -715,7 +735,9 @@ export default function SunFeeKalkulator() {
       } else if (klimatyzatorMontaz === "tak" && selectedKlimatyzatorIds.length === 0) {
         toast.warn("Wybierz co najmniej jedno urządzenie z listy klimatyzatorów.");
       } else {
-        toast.warn("Odpowiedz na pytania o rozdzielnicę i przekop; przy przekopie podaj długość w metrach.");
+        toast.warn(
+          "Odpowiedz na pytania o rozdzielnicę i przekop; przy przekopie podaj długość, typ przewodu oraz upewnij się, że dobór przewodu jest możliwy dla mocy instalacji.",
+        );
       }
     }
   };
@@ -825,6 +847,13 @@ export default function SunFeeKalkulator() {
           rozdzielnica: rozdzielnica,
           przekop:      przekop,
           przekopMetry: przekop === "tak" ? (parseInt(przekopMetry, 10) || 0) : 0,
+          przekopPrzewodTyp: przekop === "tak" ? przekopPrzewodTyp : null,
+          przekopPrzewod:     przekopQuote?.cableLabel ?? null,
+          przewodCenaZaMetr:  przekopQuote?.pricePerM ?? null,
+          przewodKwotaNetto:  przekopQuote?.cableCost ?? null,
+          kopanieKwotaNetto:  przekopQuote?.kopanieCost ?? null,
+          mocPvKwp:           przekopQuote?.powerKwpActual ?? null,
+          mocPvKwpTabela:     przekopQuote?.powerKwpUsed ?? null,
           klimatyzator: {
             montaz: klimatyzatorMontaz,
             urzadzenia:
@@ -931,6 +960,8 @@ export default function SunFeeKalkulator() {
         rozdzielnica,
         przekop,
         przekopMetry,
+        przekopPrzewodTyp,
+        przekopQuote,
         klimatyzatorMontaz,
         klimatyzatorUrzadzenia:
           klimatyzatorMontaz === "tak"
@@ -978,7 +1009,7 @@ export default function SunFeeKalkulator() {
     setMagazynIlosc("1");
     setFalownikIlosc("1");
     setFalownikMocPaneliKw("");
-    setRozdzielnica(""); setPrzekop(""); setPrzekopMetry("");
+    setRozdzielnica(""); setPrzekop(""); setPrzekopMetry(""); setPrzekopPrzewodTyp("");
     setKlimatyzatorMontaz(""); setSelectedKlimatyzatorIds([]);
     setClientName(""); setClientSurname(""); setRabat(""); setVatRate(23);
   };
@@ -1175,8 +1206,7 @@ export default function SunFeeKalkulator() {
     if (step > 4) {
       const rozdzielnicaIsTak = rozdzielnica === "tak";
       const przekopIsTak = przekop === "tak";
-      const metry = parseInt(przekopMetry, 10) || 0;
-      const przekopCost = calcPrzekop(metry);
+      const pq = przekopQuote;
       const klimaTak = klimatyzatorMontaz === "tak";
       const selectedKlima = klimatyzatoryList.filter((k) =>
         selectedKlimatyzatorIds.some((id) => String(id) === String(k.id)),
@@ -1199,9 +1229,17 @@ export default function SunFeeKalkulator() {
               {przekopIsTak && (
                 <>
                   {" "}
-                  {safeText(przekopMetry)} mb
-                  {showAllPrices && (
-                    <> — {fmt(przekopCost)} zł netto</>
+                  {safeText(przekopMetry)} m
+                  {przekopPrzewodTyp && (
+                    <> · {PRZEKOP_PRZEWOD_LABELS[przekopPrzewodTyp] ?? przekopPrzewodTyp}</>
+                  )}
+                  {pq?.cableLabel && <> · {pq.cableLabel}</>}
+                  {showAllPrices && pq?.isValid && (
+                    <>
+                      {" "}
+                      — przewód {fmt(pq.cableCost)} zł + kopanie {fmt(pq.kopanieCost)} zł ={" "}
+                      {fmt(pq.totalCost)} zł netto
+                    </>
                   )}
                 </>
               )}
@@ -1996,53 +2034,94 @@ export default function SunFeeKalkulator() {
               <label className={`kalk-radio-card${przekop === "nie" ? " selected" : ""}`}>
                 <input type="radio" name="przekop" value="nie"
                   checked={przekop === "nie"}
-                  onChange={() => setPrzekop("nie")} />
+                  onChange={() => { setPrzekop("nie"); setPrzekopPrzewodTyp(""); }} />
                 NIE
               </label>
               <label className={`kalk-radio-card kalk-radio-card--warn${przekop === "tak" ? " selected" : ""}`}>
                 <input type="radio" name="przekop" value="tak"
                   checked={przekop === "tak"}
                   onChange={() => setPrzekop("tak")} />
-                {showAllPrices ? "TAK – cena wg zakresu" : "TAK"}
+                {showAllPrices ? "TAK – przewód + kopanie" : "TAK"}
               </label>
             </div>
 
             {przekop === "tak" && (
               <>
+                <label className="kalk-label kalk-label--sm" style={{ marginTop: 12 }}>Typ przewodu</label>
+                <div className="kalk-radio-group">
+                  <label className={`kalk-radio-card${przekopPrzewodTyp === "miedz" ? " selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name="przekopPrzewodTyp"
+                      value="miedz"
+                      checked={przekopPrzewodTyp === "miedz"}
+                      onChange={() => setPrzekopPrzewodTyp("miedz")}
+                    />
+                    Miedziany (YKY)
+                  </label>
+                  <label className={`kalk-radio-card${przekopPrzewodTyp === "aluminium" ? " selected" : ""}`}>
+                    <input
+                      type="radio"
+                      name="przekopPrzewodTyp"
+                      value="aluminium"
+                      checked={przekopPrzewodTyp === "aluminium"}
+                      onChange={() => setPrzekopPrzewodTyp("aluminium")}
+                    />
+                    Aluminiowy (YAKY)
+                  </label>
+                </div>
+
                 <div className="kalk-inline">
                   <label className="kalk-label kalk-label--sm">Długość przekopu (m)</label>
-                  <input type="number" min="1" max="50" className="kalk-input kalk-input--short"
-                    placeholder="np. 20"
+                  <input type="number" min="1" max="100" className="kalk-input kalk-input--short"
+                    placeholder="np. 35"
                     required={przekop === "tak"}
                     value={przekopMetry}
                     onChange={(e) => setPrzekopMetry(e.target.value)} />
-                  {showAllPrices && przekopMetry && (
-                    <span className="kalk-calc-hint">
-                      = {fmt(calcPrzekop(parseInt(przekopMetry) || 0))} zł netto
-                    </span>
-                  )}
                 </div>
-                {showAllPrices && (
+                {przekopQuote && przekopPrzewodTyp && przekopMetry && (
                   <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 12 }}>
-                    <strong>Cennik przekopu</strong>
-                    <table style={{ marginTop: 8, width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign:"left", paddingBottom:4, fontWeight:600 }}>Zakres</th>
-                          <th style={{ textAlign:"right", paddingBottom:4, fontWeight:600 }}>Oplata jednorazowa</th>
-                          <th style={{ textAlign:"right", paddingBottom:4, fontWeight:600 }}>Cena za 1m</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[["1–10 m", "700,00 zł", "30,00 zł"], ["10–25 m", "1 000,00 zł", "35,00 zł"], ["25–50 m", "1 300,00 zł", "40,00 zł"]].map(([r, j, m]) => (
-                          <tr key={r}>
-                            <td style={{ padding:"2px 0" }}>{r}</td>
-                            <td style={{ textAlign:"right" }}>{j}</td>
-                            <td style={{ textAlign:"right" }}>{m}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    {przekopQuote.isValid ? (
+                      <>
+                        <strong>Dobór przewodu</strong>
+                        <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5 }}>
+                          Moc instalacji PV: {fmt(przekopQuote.powerKwpActual)} kWp
+                          {przekopQuote.powerKwpUsed !== przekopQuote.powerKwpActual && (
+                            <> (tabela: {przekopQuote.powerKwpUsed} kWp)</>
+                          )}
+                          <br />
+                          Przewód: <strong>{przekopQuote.cableLabel}</strong>
+                          {showAllPrices && (
+                            <>
+                              <br />
+                              Przewód: {fmt(przekopQuote.pricePerM)} zł/m × {przekopQuote.lengthM} m ={" "}
+                              <strong>{fmt(przekopQuote.cableCost)} zł</strong>
+                              <br />
+                              Kopanie: <strong>{fmt(przekopQuote.kopanieCost)} zł</strong>
+                              <br />
+                              Razem: <strong>{fmt(przekopQuote.totalCost)} zł netto</strong>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 13, color: "#b45309" }}>
+                        Brak rekomendowanego przewodu dla podanej mocy instalacji i długości przekopu.
+                        Sprawdź macierz w ustawieniach (Przekopy / przewody).
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {showAllPrices && (
+                  <div className="kalk-info-box" style={{ marginTop: 10, fontSize: 12 }}>
+                    <strong>Cennik kopania</strong>
+                    <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                      <li>1–10 m: 700 zł + 30 zł/m</li>
+                      <li>11–25 m: 1 000 zł + 35 zł/m</li>
+                      <li>26–50 m: 1 700 zł</li>
+                      <li>&gt;50 m: 1 700 zł + 35 zł za każdy metr powyżej 50 m</li>
+                    </ul>
                   </div>
                 )}
               </>
