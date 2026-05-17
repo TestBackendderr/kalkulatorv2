@@ -14,6 +14,8 @@ import {
   formatKopanieZakres,
 } from "@/utils/przekopSettings";
 import { syncKalkulatorCatalogFromApi } from "@/utils/kalkulatorCatalogSync";
+import { computeMontazKwpQuote } from "@/utils/montazKwpSettings";
+import { computeMarzaKoncowa } from "@/utils/marzaKoncowaSettings";
 import { computeMagazynLine, formatTierBreakdown, normalizePriceTiers } from "@/utils/magazynPricing";
 import {
   computeFalownikLine,
@@ -21,18 +23,8 @@ import {
   normalizeFalownikRecord,
 } from "@/utils/falownikPricing";
 
-/** Robocizna PV — brak endpointu w API; wartości do czasu dodania w backendzie */
-const LABOR_TIERS = [
-  { max: 2,        pricePerPanel: 850 },
-  { max: 4,        pricePerPanel: 650 },
-  { max: 6,        pricePerPanel: 550 },
-  { max: 10,       pricePerPanel: 500 },
-  { max: Infinity, pricePerPanel: 450 },
-];
-
-/** Koszty bez osobnych endpointów w API (admin, montaż ME, rozdzielnica) */
+/** Koszty bez endpointu w API */
 const FIXED = {
-  admin:         5000,
   montazME:      2000,
   rozdzielnica:  1500,
 };
@@ -425,6 +417,23 @@ export default function SunFeeKalkulator() {
       total += value;
     };
 
+    const {
+      effectivePower,
+      willSum,
+      a8: pvKwpCalc,
+      b8: falKwCalc,
+      c8: meKwCalc,
+    } = computeEffectivePower({
+      existingPvKwp,
+      panelCount,
+      panelData,
+      falownikMocPaneliKw,
+      falownikData,
+      falownikIlosc,
+      magazynData,
+      magazynIlosc,
+    });
+
     // Panels
     const selectedTypMontazuObj = typyMontazuList.find((t) => t.id === mountType) ?? null;
     const constructPricePerPanel = Number(selectedTypMontazuObj?.priceNetto) || 0;
@@ -433,12 +442,17 @@ export default function SunFeeKalkulator() {
     if (panelOption !== "none" && panelOption !== "" && count > 0 && panelData) {
       const panelCost     = count * panelData.price;
       const constructCost = count * constructPricePerPanel;
-      const ppp           = LABOR_TIERS.find((t) => count <= t.max)?.pricePerPanel ?? 450;
-      const labor         = count * ppp;
 
       add(`Panele (${count} × ${fmt(panelData.price)} zł)`, panelCost);
       add(`Konstrukcja – ${constructLabel} (${count} × ${fmt(constructPricePerPanel)} zł)`, constructCost);
-      add(`Robocizna PV (${count} × ${fmt(ppp)} zł/panel)`, labor);
+
+      const montazKwp = computeMontazKwpQuote(pvKwpCalc);
+      if (montazKwp.isValid) {
+        add(
+          `Montaż PV (${fmtKwp(montazKwp.kwp)} kWp × ${fmt(montazKwp.cenaZaKwp)} zł/kWp)`,
+          montazKwp.total,
+        );
+      }
 
       if (panelSource === "custom") {
         add("Transport i zamówienie paneli spoza listy", CUSTOM_PANEL_TRANSPORT);
@@ -503,10 +517,6 @@ export default function SunFeeKalkulator() {
       `Koszty marketingowe${fixedRate < 1 ? " (50% – brak ME)" : ""}${selectedLeadSrc ? ` – ${selectedLeadSrc.name}` : ""}`,
       marketingCost * fixedRate
     );
-    add(
-      `Koszty administracyjne${fixedRate < 1 ? " (50% – brak ME)" : ""}`,
-      FIXED.admin * fixedRate
-    );
 
     // WM margin
     const wmExtra = Math.round(wmVal / 0.1) * 100;
@@ -514,30 +524,28 @@ export default function SunFeeKalkulator() {
       add(`WM (${wmVal} × 1 000 zł)`, wmExtra);
     }
 
-    // ── Power check: JEŻELI(LUB(A8<B8; A8<C8); A8+C8; A8) ──────────────────────
-    const {
-      effectivePower,
-      willSum,
-      a8: pvKwpCalc,
-      b8: falKwCalc,
-      c8: meKwCalc,
-    } = computeEffectivePower({
-      existingPvKwp,
-      panelCount,
-      panelData,
-      falownikMocPaneliKw,
-      falownikData,
-      falownikIlosc,
-      magazynData,
-      magazynIlosc,
-    });
+    const razemNettoBazowe = total;
+    const marza = computeMarzaKoncowa(razemNettoBazowe);
+    if (marza.kwota > 0) {
+      add(`Marża końcowa (${marza.percent}%)`, marza.kwota);
+    }
 
     const canInstallWithoutUpgrade = connKw > 0 ? effectivePower <= connKw : null;
 
     return {
-      lines, total, canInstallWithoutUpgrade,
-      effectivePower, connKw, wmExtra,
-      willSum, pvKwpCalc, falKwCalc, meKwCalc,
+      lines,
+      total,
+      razemNettoBazowe,
+      marzaKoncowaPercent: marza.percent,
+      marzaKoncowaKwota: marza.kwota,
+      canInstallWithoutUpgrade,
+      effectivePower,
+      connKw,
+      wmExtra,
+      willSum,
+      pvKwpCalc,
+      falKwCalc,
+      meKwCalc,
     };
   }, [
     existingPvKwp, connectionKw, wm,
@@ -873,6 +881,9 @@ export default function SunFeeKalkulator() {
           finalnaKlientBrutto,
           marzaWmNetto:          parseFloat(calc.wmExtra.toFixed(2)),
           marzaWmPoRabacieNetto: rabatBrutto > 0 ? parseFloat(adjustedWmNetto.toFixed(2)) : null,
+          razemNettoBazowe:      parseFloat((calc.razemNettoBazowe ?? calc.total).toFixed(2)),
+          marzaKoncowaProcent:   calc.marzaKoncowaPercent > 0 ? calc.marzaKoncowaPercent : null,
+          marzaKoncowaNetto:    calc.marzaKoncowaKwota > 0 ? parseFloat(calc.marzaKoncowaKwota.toFixed(2)) : null,
           mocEfektywnaKw:        parseFloat(calc.effectivePower.toFixed(2)),
           czyBezZwiekszeniaMocy: calc.canInstallWithoutUpgrade,
           pozycje: calc.lines.map((l) => ({
@@ -2251,6 +2262,12 @@ export default function SunFeeKalkulator() {
                       ))}
                     </tbody>
                     <tfoot>
+                      {calc.marzaKoncowaKwota > 0 && (
+                        <tr className="kalk-subtotal-row">
+                          <td>Suma przed marżą końcową</td>
+                          <td className="kalk-td-price">{fmt(calc.razemNettoBazowe)} zł</td>
+                        </tr>
+                      )}
                       <tr className="kalk-total-row">
                         <td>Razem netto</td>
                         <td className="kalk-td-price">{fmt(calc.total)} zł</td>
@@ -2265,6 +2282,12 @@ export default function SunFeeKalkulator() {
                   <table className="kalk-table">
                     <thead><tr><th>Razem</th><th>Kwota</th></tr></thead>
                     <tfoot>
+                      {calc.marzaKoncowaKwota > 0 && (
+                        <tr className="kalk-subtotal-row">
+                          <td>Suma przed marżą końcową</td>
+                          <td className="kalk-td-price">{fmt(calc.razemNettoBazowe)} zł</td>
+                        </tr>
+                      )}
                       <tr className="kalk-total-row">
                         <td>Razem netto</td>
                         <td className="kalk-td-price">{fmt(calc.total)} zł</td>

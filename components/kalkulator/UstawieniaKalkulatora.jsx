@@ -3,6 +3,8 @@ import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
 import { PrzekopUstawieniaPanel, PrzewodyCenyPanel } from "@/components/kalkulator/PrzekopPrzewodyUstawienia";
 import PrzekopyPanel from "@/components/kalkulator/PrzekopyUstawienia";
+import MontazKwpUstawienia from "@/components/kalkulator/MontazKwpUstawienia";
+import MarzaKoncowaUstawienia from "@/components/kalkulator/MarzaKoncowaUstawienia";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -15,6 +17,8 @@ const TABS = [
   { key: "typy-montazu",       label: "Typy montażu" },
   { key: "przewody",   label: "Przewody" },
   { key: "przekopy",   label: "Przekopy" },
+  { key: "montaz-kwp", label: "Montaż PV (kWp)" },
+  { key: "marza-koncowa", label: "Marża końcowa" },
 ];
 
 const EMPTY_FALOWNIK = {
@@ -1414,7 +1418,7 @@ export default function UstawieniaKalkulatora() {
         ))}
       </div>
 
-      <div className={`usk-tab-content${activeTab === "przewody" || activeTab === "przekopy" ? " usk-tab-content--wide" : ""}`}>
+      <div className={`usk-tab-content${activeTab === "przewody" || activeTab === "przekopy" || activeTab === "montaz-kwp" ? " usk-tab-content--wide" : ""}`}>
         {activeTab === "falowniki"         && <FalownikiTab />}
         {activeTab === "panele"            && <PaneleTab />}
         {activeTab === "magazyny"           && <MagazynyTab />}
@@ -1423,6 +1427,8 @@ export default function UstawieniaKalkulatora() {
         {activeTab === "typy-montazu"       && <TypMontazuTab />}
         {activeTab === "przewody"           && <PrzewodyTab />}
         {activeTab === "przekopy"           && <PrzekopyPanel />}
+        {activeTab === "montaz-kwp"         && <MontazKwpUstawienia />}
+        {activeTab === "marza-koncowa"      && <MarzaKoncowaUstawienia />}
       </div>
     </div>
   );

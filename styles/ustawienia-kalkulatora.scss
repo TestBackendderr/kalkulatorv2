@@ -700,3 +700,29 @@ $u-radius-sm: 5px;
     border-color: $u-primary;
   }
 }
+
+// ─── Marża końcowa (ustawienia) ───────────────────────────────────────────────
+
+.usk-marza-panel {
+  max-width: 520px;
+}
+
+.usk-marza-form {
+  margin-top: 8px;
+}
+
+.usk-marza-form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.usk-marza-input {
+  max-width: 120px;
+}
+
+.usk-marza-suffix {
+  font-weight: 600;
+  color: $u-mid;
+}
