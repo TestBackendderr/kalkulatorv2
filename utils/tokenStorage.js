@@ -17,7 +17,9 @@ export function getRefreshToken() {
 export function setTokens({ accessToken, refreshToken } = {}) {
   if (!isClient()) return;
   if (accessToken) localStorage.setItem(ACCESS_KEY, accessToken);
-  if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
+  // refreshToken w httpOnly cookie: nie zapisujemy w LS; pusty string = wyczyść stary śmieć po migracji
+  if (refreshToken === "") localStorage.removeItem(REFRESH_KEY);
+  else if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
 }
 
 export function clearTokens() {

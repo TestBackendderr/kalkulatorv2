@@ -14,18 +14,21 @@ const SKIP_AUTH_PATHS = ["/auth/login", "/auth/refresh"];
 const shouldSkipAuth = (url = "") =>
   SKIP_AUTH_PATHS.some((p) => url.includes(p));
 
+/** Cookie z refresh_token (httpOnly) muszą iść z żądaniem — wymaga CORS credentials. */
+const withCredentials = true;
+
 const api = axios.create({
   baseURL: BASE_URL,
+  withCredentials,
   headers: { "Content-Type": "application/json" },
 });
 
 /**
- * Raw axios — bez interceptorów. Używany do auth-endpointów
- * (login, refresh, logout) i wewnątrz logiki rotacji tokenów,
- * żeby nie wpadać w nieskończoną pętlę 401 → refresh → 401.
+ * Raw wersja bez interceptorów — login, refresh (cookie), logout.
  */
 export const rawApi = axios.create({
   baseURL: BASE_URL,
+  withCredentials,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -54,19 +57,23 @@ let refreshPromise = null;
 
 async function performRefresh() {
   const refreshToken = getRefreshToken();
-  if (!refreshToken) throw new Error("No refresh token");
+  // Backend może używać wyłąnicznie httpOnly cookie (bez refreshToken w body).
+  const body = refreshToken ? { refreshToken } : {};
 
-  const res = await rawApi.post("/auth/refresh", { refreshToken });
+  const res = await rawApi.post("/auth/refresh", body);
   const data = res?.data || {};
 
   const accessToken = data.accessToken ?? data.access_token;
-  const newRefresh = data.refreshToken ?? data.refresh_token ?? refreshToken;
+  const newRefresh = data.refreshToken ?? data.refresh_token;
 
   if (!accessToken) {
     throw new Error("Invalid refresh response");
   }
 
-  setTokens({ accessToken, refreshToken: newRefresh });
+  setTokens({
+    accessToken,
+    ...(newRefresh != null ? { refreshToken: newRefresh } : {}),
+  });
   return accessToken;
 }
 

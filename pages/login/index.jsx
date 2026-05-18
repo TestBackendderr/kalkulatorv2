@@ -13,7 +13,11 @@ function extractServerError(err) {
   if (typeof msg === "string" && msg.trim()) return msg;
 
   if (err?.code === "ERR_NETWORK" || err?.message === "Network Error") {
-    return "Brak połączenia z serwerem (http://localhost:3000).";
+    const api = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+    return `Brak połączenia z serwerem (${api}).`;
+  }
+  if (typeof err?.message === "string" && err.message.trim() && !err?.response) {
+    return err.message;
   }
   return "Nie udało się zalogować. Spróbuj ponownie.";
 }

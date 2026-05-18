@@ -9,9 +9,12 @@ export async function loginRequest(email, password) {
   return res.data;
 }
 
-/** POST /auth/refresh — wymiana refreshToken na nowy accessToken */
+/** POST /auth/refresh — cookie refresh_token i/lub body { refreshToken } */
 export async function refreshRequest(refreshToken) {
-  const res = await rawApi.post("/auth/refresh", { refreshToken });
+  const res = await rawApi.post(
+    "/auth/refresh",
+    refreshToken ? { refreshToken } : {},
+  );
   return res.data;
 }
 

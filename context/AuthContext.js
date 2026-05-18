@@ -9,7 +9,6 @@ import {
 import { useRouter } from "next/router";
 import {
   getAccessToken,
-  getRefreshToken,
   getStoredUser,
   setStoredUser,
   setTokens,
@@ -109,11 +108,16 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const data = await loginRequest(email, password);
     const { accessToken, refreshToken } = extractTokens(data);
-    if (!accessToken || !refreshToken) {
-      throw new Error("Nieprawidłowa odpowiedź serwera (brak tokenów).");
+    if (!accessToken) {
+      throw new Error("Nieprawidłowa odpowiedź serwera (brak accessToken).");
     }
 
-    setTokens({ accessToken, refreshToken });
+    // Refresh często jest tylko w httpOnly cookie — nie wymagamy go w JSON.
+    if (refreshToken) {
+      setTokens({ accessToken, refreshToken });
+    } else {
+      setTokens({ accessToken, refreshToken: "" });
+    }
 
     const normalized = normalizeUser(extractUser(data, accessToken));
     setStoredUser(normalized);
@@ -150,12 +154,19 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     try {
       const access = getAccessToken();
-      const refresh = getRefreshToken();
       const stored = getStoredUser();
-      if (access && refresh && stored) {
+      if (!access) {
+        clearAuthStorage();
+      } else if (stored) {
         setUserState(normalizeUser(stored));
       } else {
-        clearAuthStorage();
+        const fromJwt = normalizeUser(extractUser({}, access));
+        if (fromJwt?.email ?? fromJwt?.id) {
+          setStoredUser(fromJwt);
+          setUserState(fromJwt);
+        } else {
+          clearAuthStorage();
+        }
       }
     } catch {
       clearAuthStorage();
