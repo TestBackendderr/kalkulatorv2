@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
+import api from "@/utils/axiosInstance";
 import {
-  loadMontazKwpTiers,
-  saveMontazKwpTiers,
+  syncMontazKwpCache,
   formatMontazKwpZakres,
-  DEFAULT_MONTAZ_KWP_TIERS,
 } from "@/utils/montazKwpSettings";
 
-const EMPTY_FORM = { odKwp: "", doKwp: "", cenaZaKwp: "" };
+const EMPTY_FORM = { odKw: "", doKw: "", priceNetto: "" };
+
+function extractApiError(err, fallback) {
+  const msg = err?.response?.data?.message;
+  if (Array.isArray(msg)) return msg.join(", ");
+  if (typeof msg === "string") return msg;
+  return fallback;
+}
 
 const fmt = (n) =>
   new Intl.NumberFormat("pl-PL", {
@@ -17,24 +23,31 @@ const fmt = (n) =>
 
 export default function MontazKwpUstawienia() {
   const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState(null);
 
-  const load = useCallback(() => {
-    setItems(
-      loadMontazKwpTiers().sort((a, b) => Number(a.odKwp) - Number(b.odKwp)),
-    );
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/cena-montazu");
+      const data = (res.data || []).sort(
+        (a, b) => Number(a.odKw) - Number(b.odKw),
+      );
+      setItems(data);
+      syncMontazKwpCache(data);
+    } catch {
+      toast.error("Nie udało się pobrać cennika montażu PV");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
-
-  const persist = (next) => {
-    saveMontazKwpTiers(next);
-    setItems(next);
-  };
 
   const openAdd = () => {
     setForm(EMPTY_FORM);
@@ -43,9 +56,9 @@ export default function MontazKwpUstawienia() {
 
   const openEdit = (item) => {
     setForm({
-      odKwp: String(item.odKwp ?? ""),
-      doKwp: String(item.doKwp ?? ""),
-      cenaZaKwp: String(item.cenaZaKwp ?? ""),
+      odKw: String(item.odKw ?? ""),
+      doKw: String(item.doKw ?? ""),
+      priceNetto: String(item.priceNetto ?? ""),
     });
     setModal({ mode: "edit", item });
   };
@@ -53,9 +66,9 @@ export default function MontazKwpUstawienia() {
   const closeModal = () => setModal(null);
 
   const validate = () => {
-    const from = parseFloat(String(form.odKwp).replace(",", "."));
-    const to = parseFloat(String(form.doKwp).replace(",", "."));
-    const price = parseFloat(String(form.cenaZaKwp).replace(",", "."));
+    const from = parseFloat(String(form.odKw).replace(",", "."));
+    const to = parseFloat(String(form.doKw).replace(",", "."));
+    const price = parseFloat(String(form.priceNetto).replace(",", "."));
     if (!Number.isFinite(from) || from < 0) {
       toast.warn("Podaj poprawny zakres od (kWp)");
       return false;
@@ -71,41 +84,55 @@ export default function MontazKwpUstawienia() {
     return true;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
     setSaving(true);
     try {
-      const row = {
-        odKwp: parseFloat(String(form.odKwp).replace(",", ".")),
-        doKwp: parseFloat(String(form.doKwp).replace(",", ".")),
-        cenaZaKwp: parseFloat(String(form.cenaZaKwp).replace(",", ".")),
-        isActive: true,
+      const payload = {
+        odKw: parseFloat(String(form.odKw).replace(",", ".")),
+        doKw: parseFloat(String(form.doKw).replace(",", ".")),
+        priceNetto: parseFloat(String(form.priceNetto).replace(",", ".")),
       };
       if (modal.mode === "add") {
-        persist(
-          [...items, { ...row, id: `m${Date.now()}` }].sort(
-            (a, b) => a.odKwp - b.odKwp,
-          ),
-        );
+        await api.post("/cena-montazu", payload);
         toast.success("Zakres dodany");
       } else {
-        persist(
-          items
-            .map((x) => (x.id === modal.item.id ? { ...x, ...row } : x))
-            .sort((a, b) => a.odKwp - b.odKwp),
-        );
+        await api.patch(`/cena-montazu/${modal.item.id}`, payload);
         toast.success("Zakres zaktualizowany");
       }
       closeModal();
+      load();
+    } catch (err) {
+      toast.error(extractApiError(err, "Błąd zapisu"));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleRestoreDefaults = () => {
-    if (!window.confirm("Przywrócić domyślny cennik montażu PV?")) return;
-    persist(DEFAULT_MONTAZ_KWP_TIERS.map((t) => ({ ...t })));
-    toast.success("Przywrócono domyślne wartości");
+  const handleDeactivate = async (item) => {
+    setBusyId(item.id);
+    try {
+      await api.delete(`/cena-montazu/${item.id}`);
+      toast.success("Zakres dezaktywowany");
+      load();
+    } catch (err) {
+      toast.error(extractApiError(err, "Błąd dezaktywacji"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleActivate = async (item) => {
+    setBusyId(item.id);
+    try {
+      await api.patch(`/cena-montazu/${item.id}/activate`);
+      toast.success("Zakres aktywowany");
+      load();
+    } catch (err) {
+      toast.error(extractApiError(err, "Błąd aktywacji"));
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
@@ -114,74 +141,90 @@ export default function MontazKwpUstawienia() {
         <div>
           <h2 className="usk-tab-title">Montaż PV (kWp)</h2>
           <p className="usk-panel-desc" style={{ margin: "6px 0 0" }}>
-            Stawka netto za kWp. W kalkulatorze:{" "}
-            <strong>moc instalacji PV × stawka</strong> z jednego progu
-            (np. 3,5 kWp × 600 zł = 2 100 zł).
+            Cennik z bazy (API <code>/cena-montazu</code>). W kalkulatorze:{" "}
+            <strong>moc instalacji PV × stawka zł/kWp</strong> z jednego progu.
           </p>
         </div>
         <div className="usk-przekop-actions">
-          <button type="button" className="usk-btn usk-btn--ghost usk-btn--sm" onClick={handleRestoreDefaults}>
-            Domyślne
-          </button>
           <button type="button" className="usk-btn usk-btn--primary usk-btn--sm" onClick={openAdd}>
             + Dodaj zakres
           </button>
         </div>
       </div>
 
-      <div className="usk-kopanie-table-wrap">
-        <table className="usk-przewod-table usk-kopanie-table">
-          <thead>
-            <tr>
-              <th>Zakres mocy PV</th>
-              <th>Cena netto (zł / kWp)</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className={item.isActive ? "" : "usk-row--inactive"}>
-                <td className={item.isActive ? "usk-kopanie-zakres" : "usk-kopanie-zakres usk-strikethrough"}>
-                  {formatMontazKwpZakres(item.odKwp, item.doKwp)}
-                </td>
-                <td>{fmt(item.cenaZaKwp)} zł</td>
-                <td>
-                  <span className={`usk-badge ${item.isActive ? "usk-badge--active" : "usk-badge--inactive"}`}>
-                    {item.isActive ? "Aktywny" : "Nieaktywny"}
-                  </span>
-                </td>
-                <td className="usk-actions">
-                  <button type="button" className="usk-btn usk-btn--sm" onClick={() => openEdit(item)}>
-                    Edytuj
-                  </button>
-                  {item.isActive ? (
-                    <button
-                      type="button"
-                      className="usk-btn usk-btn--sm usk-btn--danger-outline"
-                      onClick={() =>
-                        persist(items.map((x) => (x.id === item.id ? { ...x, isActive: false } : x)))
-                      }
-                    >
-                      Dezaktywuj
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="usk-btn usk-btn--sm usk-btn--primary"
-                      onClick={() =>
-                        persist(items.map((x) => (x.id === item.id ? { ...x, isActive: true } : x)))
-                      }
-                    >
-                      Aktywuj
-                    </button>
-                  )}
-                </td>
+      {loading ? (
+        <div className="usk-loading" style={{ padding: "24px 0" }}>Ładowanie…</div>
+      ) : (
+        <div className="usk-kopanie-table-wrap">
+          <table className="usk-przewod-table usk-kopanie-table">
+            <thead>
+              <tr>
+                <th>Zakres mocy PV</th>
+                <th>Cena netto (zł / kWp)</th>
+                <th>Status</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {items.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="usk-empty">Brak zakresów — dodaj pierwszy</td>
+                </tr>
+              )}
+              {items.map((item) => (
+                <tr key={item.id} className={item.isActive ? "" : "usk-row--inactive"}>
+                  <td
+                    className={
+                      item.isActive ? "usk-kopanie-zakres" : "usk-kopanie-zakres usk-strikethrough"
+                    }
+                  >
+                    {formatMontazKwpZakres(item.odKw, item.doKw)}
+                  </td>
+                  <td>{fmt(item.priceNetto)} zł</td>
+                  <td>
+                    <span
+                      className={`usk-badge ${
+                        item.isActive ? "usk-badge--active" : "usk-badge--inactive"
+                      }`}
+                    >
+                      {item.isActive ? "Aktywny" : "Nieaktywny"}
+                    </span>
+                  </td>
+                  <td className="usk-actions">
+                    <button
+                      type="button"
+                      className="usk-btn usk-btn--sm"
+                      disabled={busyId === item.id}
+                      onClick={() => openEdit(item)}
+                    >
+                      Edytuj
+                    </button>
+                    {item.isActive ? (
+                      <button
+                        type="button"
+                        className="usk-btn usk-btn--sm usk-btn--danger-outline"
+                        disabled={busyId === item.id}
+                        onClick={() => handleDeactivate(item)}
+                      >
+                        Dezaktywuj
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="usk-btn usk-btn--sm usk-btn--primary"
+                        disabled={busyId === item.id}
+                        onClick={() => handleActivate(item)}
+                      >
+                        Aktywuj
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {modal && (
         <div className="usk-overlay" onClick={closeModal}>
@@ -199,8 +242,8 @@ export default function MontazKwpUstawienia() {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={form.odKwp}
-                    onChange={(e) => setForm({ ...form, odKwp: e.target.value })}
+                    value={form.odKw}
+                    onChange={(e) => setForm({ ...form, odKw: e.target.value })}
                     disabled={saving}
                   />
                 </div>
@@ -211,8 +254,8 @@ export default function MontazKwpUstawienia() {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={form.doKwp}
-                    onChange={(e) => setForm({ ...form, doKwp: e.target.value })}
+                    value={form.doKw}
+                    onChange={(e) => setForm({ ...form, doKw: e.target.value })}
                     disabled={saving}
                   />
                 </div>
@@ -223,17 +266,24 @@ export default function MontazKwpUstawienia() {
                 type="number"
                 min="0"
                 step="1"
-                value={form.cenaZaKwp}
-                onChange={(e) => setForm({ ...form, cenaZaKwp: e.target.value })}
+                value={form.priceNetto}
+                onChange={(e) => setForm({ ...form, priceNetto: e.target.value })}
                 disabled={saving}
               />
               <p className="usk-hint">
-                Zakres: <strong>{formatMontazKwpZakres(form.odKwp, form.doKwp)}</strong>
+                Zakres: <strong>{formatMontazKwpZakres(form.odKw, form.doKw)}</strong>
               </p>
             </div>
             <div className="usk-modal-footer">
-              <button type="button" className="usk-btn usk-btn--ghost" onClick={closeModal}>Anuluj</button>
-              <button type="button" className="usk-btn usk-btn--primary" onClick={handleSave} disabled={saving}>
+              <button type="button" className="usk-btn usk-btn--ghost" onClick={closeModal}>
+                Anuluj
+              </button>
+              <button
+                type="button"
+                className="usk-btn usk-btn--primary"
+                onClick={handleSave}
+                disabled={saving}
+              >
                 {saving ? "Zapisywanie…" : "Zapisz"}
               </button>
             </div>

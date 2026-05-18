@@ -7,6 +7,38 @@ import { computeEffectivePower } from "./mocPrzylaczeniowaSheet.js";
 const fmtPdf = (n) =>
   new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
 
+const fmtPdfKwhKw = (n) =>
+  new Intl.NumberFormat("pl-PL", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number(n));
+
+/** Nazwa magazynu w PDF: „nazwa (pojemność kWh / moc kW)”. */
+function formatMagazynNazwaPdf(mag) {
+  if (!mag) return "—";
+  const name = String(mag.name ?? "").trim() || "—";
+  const kwh =
+    mag.unitCapacityKwh != null && mag.unitCapacityKwh !== ""
+      ? Number(mag.unitCapacityKwh)
+      : mag.capacityKwh != null
+        ? Number(mag.capacityKwh)
+        : null;
+  const kw =
+    mag.unitPowerKw != null && mag.unitPowerKw !== ""
+      ? Number(mag.unitPowerKw)
+      : mag.powerKw != null
+        ? Number(mag.powerKw)
+        : null;
+  const hasKwh = Number.isFinite(kwh) && kwh > 0;
+  const hasKw = Number.isFinite(kw) && kw > 0;
+  if (!hasKwh && !hasKw) return pl(name);
+  if (hasKwh && hasKw) {
+    return pl(`${name} (${fmtPdfKwhKw(kwh)} kWh / ${fmtPdfKwhKw(kw)} kW)`);
+  }
+  if (hasKwh) return pl(`${name} (${fmtPdfKwhKw(kwh)} kWh)`);
+  return pl(`${name} (${fmtPdfKwhKw(kw)} kW)`);
+}
+
 function pl(s) {
   return String(s ?? "")
     .replace(/ą/g, "a").replace(/Ą/g, "A").replace(/ę/g, "e").replace(/Ę/g, "E")
@@ -742,7 +774,7 @@ export async function renderKalkulatorWycenaPdfAndSave(ctx) {
 
   if (magazynData) {
     formRow("Typ", "Magazyn energii");
-    formRow("Nazwa", pl(magazynData.name || "—"));
+    formRow("Nazwa", formatMagazynNazwaPdf(magazynData));
     formRow("Ilość", String(magazynData.ilosc ?? 1));
     formRow("Jednostka", String(magazynData.jednostka || "szt."));
   } else {
@@ -823,7 +855,7 @@ export async function renderKalkulatorWycenaPdfAndSave(ctx) {
     fwButton("Dodaj komponenty ręcznie", [22, 163, 74]);
 
     formRow("Typ", "Magazyn energii");
-    formRow("Nazwa", pl(magazynData.name || "—"));
+    formRow("Nazwa", formatMagazynNazwaPdf(magazynData));
     formRow("Ilość", String(magazynData.ilosc ?? 1));
     formRow("Jednostka", String(magazynData.jednostka || "szt."));
 
@@ -888,7 +920,7 @@ export async function renderKalkulatorWycenaPdfAndSave(ctx) {
   const blokiDanych = [
     {
       typ: "Magazyn energii",
-      nazwa: magazynData ? pl(magazynData.name || "—") : "—",
+      nazwa: magazynData ? formatMagazynNazwaPdf(magazynData) : "—",
       ilosc: magazynData ? String(magazynData.ilosc ?? 1) : "—",
       jednostka: magazynData ? String(magazynData.jednostka || "szt.") : "—",
     },

@@ -6,6 +6,8 @@ import {
   saveYakyPrices,
   syncKopaniePrzekopCache,
 } from "@/utils/przekopSettings";
+import { syncMontazKwpCache } from "@/utils/montazKwpSettings";
+import { syncMarzaKoncowaCache } from "@/utils/marzaKoncowaSettings";
 
 /** API matrix → { [dlugoscId]: { [kwp]: nazwa } } */
 export function normalizeApiMatrix(apiMatrix) {
@@ -47,6 +49,8 @@ export async function syncKalkulatorCatalogFromApi() {
     yakyMatRes,
     ykyPrRes,
     yakyPrRes,
+    montazRes,
+    marzaRes,
   ] = await Promise.all([
     api.get("/kalkulator/falowniki?onlyActive=true"),
     api.get("/kalkulator/panele?onlyActive=true"),
@@ -59,6 +63,10 @@ export async function syncKalkulatorCatalogFromApi() {
     api.get("/przewod-matryca/aluminiowe"),
     api.get("/przewody/miedziane"),
     api.get("/przewody/aluminiowe"),
+    api.get("/cena-montazu?onlyActive=true"),
+    api.get("/marza-koncowa/aktualna").catch((err) =>
+      err?.response?.status === 404 ? { data: null } : Promise.reject(err),
+    ),
   ]);
 
   const ykyMatrix = normalizeApiMatrix(ykyMatRes.data?.matrix);
@@ -71,6 +79,15 @@ export async function syncKalkulatorCatalogFromApi() {
   const kopanieRanges = kopRes.data || [];
   syncKopaniePrzekopCache(kopanieRanges);
 
+  const montazRanges = montazRes.data || [];
+  syncMontazKwpCache(montazRanges);
+
+  if (marzaRes.data) {
+    syncMarzaKoncowaCache(marzaRes.data);
+  } else {
+    syncMarzaKoncowaCache({ wartosc: 0 });
+  }
+
   return {
     falowniki: fRes.data || [],
     panele: pRes.data || [],
@@ -79,5 +96,7 @@ export async function syncKalkulatorCatalogFromApi() {
     leadSources: lsRes.data || [],
     typyMontazu: tmRes.data || [],
     kopanieRanges,
+    montazRanges,
+    marzaKoncowa: marzaRes.data,
   };
 }

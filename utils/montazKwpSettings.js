@@ -18,23 +18,41 @@ function readJson(key) {
   }
 }
 
-export function loadMontazKwpTiers() {
-  const saved = readJson(LS_MONTAZ_KWP);
-  if (!Array.isArray(saved) || saved.length === 0) {
-    return DEFAULT_MONTAZ_KWP_TIERS.map((t) => ({ ...t }));
-  }
-  return saved.map((t, i) => ({
-    id: t.id ?? `m${i}`,
-    odKwp: Number(t.odKwp) ?? 0,
-    doKwp: Number(t.doKwp) ?? 0,
-    cenaZaKwp: Number(t.cenaZaKwp) ?? 0,
-    isActive: t.isActive !== false,
+/** Mapowanie z API CenaMontazu (odKw, doKw, priceNetto). */
+export function normalizeMontazKwpFromApi(rows) {
+  return (rows || []).map((r) => ({
+    id: r.id,
+    odKwp: Number(r.odKw ?? r.odKwp) ?? 0,
+    doKwp: Number(r.doKw ?? r.doKwp) ?? 0,
+    cenaZaKwp: Number(r.priceNetto ?? r.cenaZaKwp) ?? 0,
+    isActive: r.isActive !== false,
   }));
 }
 
-export function saveMontazKwpTiers(tiers) {
+export function syncMontazKwpCache(apiRows) {
+  const normalized = normalizeMontazKwpFromApi(apiRows);
   if (typeof window !== "undefined") {
-    localStorage.setItem(LS_MONTAZ_KWP, JSON.stringify(tiers));
+    localStorage.setItem(LS_MONTAZ_KWP, JSON.stringify(normalized));
+  }
+  return normalized;
+}
+
+export function loadMontazKwpTiers() {
+  if (typeof window === "undefined") return DEFAULT_MONTAZ_KWP_TIERS.map((t) => ({ ...t }));
+  const raw = localStorage.getItem(LS_MONTAZ_KWP);
+  if (raw === null) return DEFAULT_MONTAZ_KWP_TIERS.map((t) => ({ ...t }));
+  try {
+    const saved = JSON.parse(raw);
+    if (!Array.isArray(saved)) return [];
+    return saved.map((t, i) => ({
+      id: t.id ?? `m${i}`,
+      odKwp: Number(t.odKwp ?? t.odKw) ?? 0,
+      doKwp: Number(t.doKwp ?? t.doKw) ?? 0,
+      cenaZaKwp: Number(t.cenaZaKwp ?? t.priceNetto) ?? 0,
+      isActive: t.isActive !== false,
+    }));
+  } catch {
+    return [];
   }
 }
 
