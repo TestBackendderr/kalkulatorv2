@@ -88,7 +88,7 @@ export default function MarzaKoncowaUstawienia() {
           <label className="usk-label">Marża końcowa (%)</label>
           <div className="usk-marza-input-row">
             <input
-              className="usk-input"
+              className="usk-input usk-marza-input"
               type="number"
               min="0"
               step="0.1"
@@ -97,7 +97,6 @@ export default function MarzaKoncowaUstawienia() {
               disabled={saving}
               placeholder="np. 5"
             />
-            <span className="usk-marza-suffix">%</span>
             <button
               type="button"
               className="usk-btn usk-btn--primary"

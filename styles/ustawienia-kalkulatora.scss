@@ -707,8 +707,26 @@ $u-radius-sm: 5px;
   max-width: 520px;
 }
 
+.usk-marza-koncowa-panel {
+  max-width: 520px;
+}
+
 .usk-marza-form {
   margin-top: 8px;
+
+  .usk-label {
+    display: block;
+    margin-bottom: 8px;
+  }
+}
+
+.usk-marza-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  margin-bottom: 16px;
 }
 
 .usk-marza-form-row {
@@ -722,7 +740,6 @@ $u-radius-sm: 5px;
   max-width: 120px;
 }
 
-.usk-marza-suffix {
-  font-weight: 600;
-  color: $u-mid;
+.usk-marza-form .usk-hint {
+  margin-top: 0;
 }
