@@ -21,8 +21,18 @@ const TABS = [
   { key: "marza-koncowa", label: "Marża końcowa" },
 ];
 
+const FALOWNIK_TYP_OPTIONS = [
+  { value: "Niskopradowy", label: "Niskonapięciowy" },
+  { value: "Wysokopradowy", label: "Wysokonapięciowy" },
+];
+
+function formatFalownikTyp(typ) {
+  return FALOWNIK_TYP_OPTIONS.find((o) => o.value === typ)?.label ?? typ ?? "—";
+}
+
 const EMPTY_FALOWNIK = {
   name: "",
+  typ: "Niskopradowy",
   powerKw: "",
   priceNetto: "",
   cennikProgowy: [{ step: "1", priceNetto: "" }],
@@ -220,6 +230,7 @@ function FalownikiTab() {
   const openEdit = (item) => {
     setForm({
       name:          item.name,
+      typ:           item.typ || "Niskopradowy",
       powerKw:       item.powerKw,
       priceNetto:    item.priceNetto ?? "",
       cennikProgowy: parseCennikProgowy(item),
@@ -231,6 +242,10 @@ function FalownikiTab() {
 
   const validate = () => {
     if (!form.name.trim())                   { toast.warn("Nazwa jest wymagana"); return false; }
+    if (!FALOWNIK_TYP_OPTIONS.some((o) => o.value === form.typ)) {
+      toast.warn("Wybierz typ falownika");
+      return false;
+    }
     if (!form.powerKw || +form.powerKw <= 0) { toast.warn("Moc musi być większa od 0"); return false; }
     return true;
   };
@@ -247,6 +262,7 @@ function FalownikiTab() {
 
       const payload = {
         name:     form.name.trim(),
+        typ:      form.typ,
         powerKw:  +form.powerKw,
         isActive: form.isActive,
         ...(firstPrice > 0 && { priceNetto: firstPrice }),
@@ -296,6 +312,7 @@ function FalownikiTab() {
             <thead>
               <tr>
                 <th>Nazwa</th>
+                <th>Typ</th>
                 <th>Moc (kW)</th>
                 <th>Cennik progowy (zł netto)</th>
                 <th>Status</th>
@@ -304,13 +321,14 @@ function FalownikiTab() {
             </thead>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={5} className="usk-empty">Brak danych</td></tr>
+                <tr><td colSpan={6} className="usk-empty">Brak danych</td></tr>
               )}
               {items.map((item) => {
                 const tiers = parseCennikProgowy(item);
                 return (
                   <tr key={item.id} className={item.isActive ? "" : "usk-row--inactive"}>
                     <td className={item.isActive ? "" : "usk-strikethrough"}>{item.name}</td>
+                    <td>{formatFalownikTyp(item.typ)}</td>
                     <td>{item.powerKw}</td>
                     <td>
                       {tiers.length > 1
@@ -350,6 +368,17 @@ function FalownikiTab() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="np. Deye SUN-8K"
               />
+
+              <label className="usk-label">Typ *</label>
+              <select
+                className="usk-input"
+                value={form.typ}
+                onChange={(e) => setForm({ ...form, typ: e.target.value })}
+              >
+                {FALOWNIK_TYP_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
 
               <label className="usk-label">Moc (kW) *</label>
               <input
