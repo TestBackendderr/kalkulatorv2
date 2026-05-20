@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const LoginForm = ({ onSubmit, error, submitting = false }) => {
+const LoginForm = ({ onSubmit, error, blocked = false, submitting = false }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -12,7 +12,19 @@ const LoginForm = ({ onSubmit, error, submitting = false }) => {
 
   return (
     <form onSubmit={handleSubmit}>
-      {error && <p className="error">{error}</p>}
+      {error && blocked ? (
+        <div className="login-alert login-alert--blocked" role="alert">
+          <span className="login-alert__icon" aria-hidden="true">
+            ⛔
+          </span>
+          <div>
+            <strong>Konto zablokowane</strong>
+            <p>{error}</p>
+          </div>
+        </div>
+      ) : (
+        error && <p className="error">{error}</p>
+      )}
       <div className="form-group">
         <label htmlFor="email">Email</label>
         <input

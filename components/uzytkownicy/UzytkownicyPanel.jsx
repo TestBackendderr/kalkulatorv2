@@ -13,6 +13,12 @@ function getRoleLabel(role) {
 
 function extractListFromResponse(payload) {
   if (Array.isArray(payload)) return { items: payload, total: payload.length };
+  if (Array.isArray(payload?.dane)) {
+    return {
+      items: payload.dane,
+      total: payload.meta?.total ?? payload.dane.length,
+    };
+  }
   if (Array.isArray(payload?.data)) {
     return {
       items: payload.data,
@@ -43,6 +49,15 @@ const EMPTY_FORM = {
   rola: "Handlowiec",
 };
 
+function userToEditForm(u) {
+  return {
+    imie: u.imie || "",
+    nazwisko: u.nazwisko || "",
+    email: u.email || "",
+    rola: u.rola || "Handlowiec",
+  };
+}
+
 const SEARCH_DEBOUNCE_MS = 350;
 
 export default function UzytkownicyPanel() {
@@ -51,8 +66,18 @@ export default function UzytkownicyPanel() {
 
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [passwordUser, setPasswordUser] = useState(null);
+  const [passwordForm, setPasswordForm] = useState({
+    noweHaslo: "",
+    potwierdz: "",
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   const debounceRef = useRef(null);
 
@@ -66,8 +91,9 @@ export default function UzytkownicyPanel() {
       if (trimmed) params.set("szukaj", trimmed);
 
       const res = await api.get(`/users?${params.toString()}`);
-      const { items } = extractListFromResponse(res.data);
+      const { items, total: count } = extractListFromResponse(res.data);
       setUsers(items);
+      setTotal(count);
     } catch (err) {
       toast.error(extractApiError(err, "Nie udało się pobrać użytkowników"));
       setUsers([]);
@@ -147,6 +173,110 @@ export default function UzytkownicyPanel() {
 
   const isUserBlocked = (u) =>
     u?.zablokowany === true || u?.isBlocked === true;
+
+  const openEdit = (u) => {
+    setEditingUser(u);
+    setEditForm(userToEditForm(u));
+  };
+
+  const closeEdit = () => {
+    setEditingUser(null);
+    setEditForm(null);
+  };
+
+  const handleEditChange = (field) => (e) => {
+    setEditForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const validateEdit = () => {
+    if (!editForm.imie.trim()) {
+      toast.warn("Imię jest wymagane");
+      return false;
+    }
+    if (!editForm.nazwisko.trim()) {
+      toast.warn("Nazwisko jest wymagane");
+      return false;
+    }
+    if (!editForm.email.trim()) {
+      toast.warn("Email jest wymagany");
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email.trim())) {
+      toast.warn("Nieprawidłowy adres email");
+      return false;
+    }
+    return true;
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingUser || !validateEdit()) return;
+
+    setEditSaving(true);
+    try {
+      await api.put(`/users/${editingUser.id}`, {
+        imie: editForm.imie.trim(),
+        nazwisko: editForm.nazwisko.trim(),
+        email: editForm.email.trim(),
+        rola: editForm.rola,
+      });
+      toast.success("Użytkownik zaktualizowany");
+      closeEdit();
+      load(search);
+    } catch (err) {
+      toast.error(extractApiError(err, "Błąd aktualizacji użytkownika"));
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const openPassword = (u) => {
+    setPasswordUser(u);
+    setPasswordForm({ noweHaslo: "", potwierdz: "" });
+  };
+
+  const closePassword = () => {
+    setPasswordUser(null);
+    setPasswordForm({ noweHaslo: "", potwierdz: "" });
+  };
+
+  const handlePasswordChange = (field) => (e) => {
+    setPasswordForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const validatePassword = () => {
+    if (!passwordForm.noweHaslo.trim()) {
+      toast.warn("Nowe hasło jest wymagane");
+      return false;
+    }
+    if (passwordForm.noweHaslo.length < 8) {
+      toast.warn("Hasło musi mieć co najmniej 8 znaków");
+      return false;
+    }
+    if (passwordForm.noweHaslo !== passwordForm.potwierdz) {
+      toast.warn("Hasła nie są identyczne");
+      return false;
+    }
+    return true;
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!passwordUser || !validatePassword()) return;
+
+    setPasswordSaving(true);
+    try {
+      await api.patch(`/users/${passwordUser.id}/haslo`, {
+        noweHaslo: passwordForm.noweHaslo,
+      });
+      toast.success("Hasło zostało zmienione");
+      closePassword();
+    } catch (err) {
+      toast.error(extractApiError(err, "Nie udało się zmienić hasła"));
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
 
   const handleToggleBlock = async (u) => {
     setBusyId(u.id);
@@ -270,7 +400,7 @@ export default function UzytkownicyPanel() {
       <section className="uz-card uz-card--list">
         <div className="uz-list-header">
           <h2 className="uz-card-title">
-            Lista użytkowników ({users.length})
+            Lista użytkowników ({total || users.length})
           </h2>
           <input
             className="uz-search"
@@ -324,11 +454,11 @@ export default function UzytkownicyPanel() {
                       </td>
                       <td>
                         {isBlocked ? (
-                          <span className="uz-role uz-role--handl">
+                          <span className="uz-role uz-role--blocked">
                             Zablokowany
                           </span>
                         ) : (
-                          <span className="uz-role uz-role--admin">
+                          <span className="uz-role uz-role--active">
                             Aktywny
                           </span>
                         )}
@@ -344,19 +474,38 @@ export default function UzytkownicyPanel() {
                             })
                           : "—"}
                       </td>
-                      <td>
+                      <td className="uz-td-actions">
                         <button
                           type="button"
-                          className="uz-btn uz-btn--primary"
-                          style={{ marginRight: 8 }}
+                          className="uz-btn uz-btn--ghost"
                           disabled={busyId === u.id}
-                          onClick={() => handleToggleBlock(u)}
+                          onClick={() => openEdit(u)}
                         >
-                          {isBlocked ? "Odblokuj" : "Zablokuj"}
+                          Edytuj
                         </button>
                         <button
                           type="button"
-                          className="uz-btn"
+                          className="uz-btn uz-btn--ghost"
+                          disabled={busyId === u.id}
+                          onClick={() => openPassword(u)}
+                        >
+                          Hasło
+                        </button>
+                        <button
+                          type="button"
+                          className={`uz-btn ${isBlocked ? "uz-btn--success" : "uz-btn--warn"}`}
+                          disabled={busyId === u.id}
+                          onClick={() => handleToggleBlock(u)}
+                        >
+                          {busyId === u.id
+                            ? "…"
+                            : isBlocked
+                              ? "Odblokuj"
+                              : "Zablokuj"}
+                        </button>
+                        <button
+                          type="button"
+                          className="uz-btn uz-btn--danger"
                           disabled={busyId === u.id}
                           onClick={() => handleDelete(u)}
                         >
@@ -371,6 +520,172 @@ export default function UzytkownicyPanel() {
           </div>
         )}
       </section>
+
+      {passwordUser && (
+        <div className="uz-overlay" onClick={closePassword}>
+          <div
+            className="uz-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="uz-password-title"
+          >
+            <div className="uz-modal-head">
+              <h3 id="uz-password-title">
+                Zmień hasło: {passwordUser.imie} {passwordUser.nazwisko}
+              </h3>
+              <button
+                type="button"
+                className="uz-modal-close"
+                onClick={closePassword}
+                aria-label="Zamknij"
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={handlePasswordSubmit}>
+              <div className="uz-modal-body">
+                <p className="uz-modal-hint">
+                  Użytkownik będzie musiał zalogować się nowym hasłem. Aktywne
+                  sesje zostaną wylogowane.
+                </p>
+                <div className="uz-form-grid uz-form-grid--single">
+                  <div className="uz-field">
+                    <label htmlFor="uz-pw-nowe">Nowe hasło *</label>
+                    <input
+                      id="uz-pw-nowe"
+                      type="password"
+                      value={passwordForm.noweHaslo}
+                      onChange={handlePasswordChange("noweHaslo")}
+                      placeholder="min. 8 znaków"
+                      autoComplete="new-password"
+                      disabled={passwordSaving}
+                    />
+                  </div>
+                  <div className="uz-field">
+                    <label htmlFor="uz-pw-potwierdz">Potwierdź hasło *</label>
+                    <input
+                      id="uz-pw-potwierdz"
+                      type="password"
+                      value={passwordForm.potwierdz}
+                      onChange={handlePasswordChange("potwierdz")}
+                      placeholder="powtórz hasło"
+                      autoComplete="new-password"
+                      disabled={passwordSaving}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="uz-modal-footer">
+                <button
+                  type="button"
+                  className="uz-btn uz-btn--ghost"
+                  onClick={closePassword}
+                  disabled={passwordSaving}
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="submit"
+                  className="uz-btn uz-btn--primary"
+                  disabled={passwordSaving}
+                >
+                  {passwordSaving ? "Zapisywanie…" : "Zmień hasło"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingUser && editForm && (
+        <div className="uz-overlay" onClick={closeEdit}>
+          <div
+            className="uz-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="uz-edit-title"
+          >
+            <div className="uz-modal-head">
+              <h3 id="uz-edit-title">
+                Edytuj: {editingUser.imie} {editingUser.nazwisko}
+              </h3>
+              <button
+                type="button"
+                className="uz-modal-close"
+                onClick={closeEdit}
+                aria-label="Zamknij"
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="uz-modal-body">
+                <div className="uz-form-grid">
+                  <div className="uz-field">
+                    <label htmlFor="uz-edit-imie">Imię *</label>
+                    <input
+                      id="uz-edit-imie"
+                      type="text"
+                      value={editForm.imie}
+                      onChange={handleEditChange("imie")}
+                      disabled={editSaving}
+                    />
+                  </div>
+                  <div className="uz-field">
+                    <label htmlFor="uz-edit-nazwisko">Nazwisko *</label>
+                    <input
+                      id="uz-edit-nazwisko"
+                      type="text"
+                      value={editForm.nazwisko}
+                      onChange={handleEditChange("nazwisko")}
+                      disabled={editSaving}
+                    />
+                  </div>
+                  <div className="uz-field">
+                    <label htmlFor="uz-edit-email">Email *</label>
+                    <input
+                      id="uz-edit-email"
+                      type="email"
+                      value={editForm.email}
+                      onChange={handleEditChange("email")}
+                      disabled={editSaving}
+                    />
+                  </div>
+                  <div className="uz-field">
+                    <label htmlFor="uz-edit-rola">Rola *</label>
+                    <select
+                      id="uz-edit-rola"
+                      value={editForm.rola}
+                      onChange={handleEditChange("rola")}
+                      disabled={editSaving}
+                    >
+                      <option value="Handlowiec">Handlowiec</option>
+                      <option value="Administrator">Administrator</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="uz-modal-footer">
+                <button
+                  type="button"
+                  className="uz-btn uz-btn--ghost"
+                  onClick={closeEdit}
+                  disabled={editSaving}
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="submit"
+                  className="uz-btn uz-btn--primary"
+                  disabled={editSaving}
+                >
+                  {editSaving ? "Zapisywanie…" : "Zapisz zmiany"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

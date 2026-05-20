@@ -7,7 +7,7 @@ import {
 } from "./tokenStorage";
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 const SKIP_AUTH_PATHS = ["/auth/login", "/auth/refresh"];
 

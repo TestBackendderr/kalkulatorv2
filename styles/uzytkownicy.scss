@@ -11,7 +11,7 @@ $uz-shadow:    0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.06);
 
 .uz-wrapper {
   padding: 32px 28px 48px;
-  max-width: 960px;
+  max-width: 1100px;
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
@@ -64,6 +64,17 @@ $uz-shadow:    0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.06);
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
   }
+
+  &--single {
+    grid-template-columns: 1fr;
+  }
+}
+
+.uz-modal-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: $uz-gray;
+  line-height: 1.45;
 }
 
 .uz-field {
@@ -104,13 +115,19 @@ $uz-shadow:    0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.06);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 20px;
+  padding: 7px 12px;
   border-radius: $uz-radius-sm;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  border: none;
-  transition: background 0.15s;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
 
   &--primary {
     background: $uz-primary;
@@ -119,12 +136,54 @@ $uz-shadow:    0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.06);
     &:hover:not(:disabled) {
       background: $uz-primary-d;
     }
+  }
 
-    &:disabled {
-      opacity: 0.65;
-      cursor: not-allowed;
+  &--ghost {
+    background: $uz-white;
+    color: $uz-dark;
+    border-color: $uz-border;
+
+    &:hover:not(:disabled) {
+      background: $uz-bg;
     }
   }
+
+  &--warn {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fcd34d;
+
+    &:hover:not(:disabled) {
+      background: #fde68a;
+    }
+  }
+
+  &--success {
+    background: #d1fae5;
+    color: #065f46;
+    border-color: #6ee7b7;
+
+    &:hover:not(:disabled) {
+      background: #a7f3d0;
+    }
+  }
+
+  &--danger {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: #fca5a5;
+
+    &:hover:not(:disabled) {
+      background: #fecaca;
+    }
+  }
+}
+
+.uz-td-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 280px;
 }
 
 .uz-list-header {
@@ -218,4 +277,79 @@ $uz-shadow:    0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.06);
     background: #dbeafe;
     color: #1d4ed8;
   }
+
+  &--blocked {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  &--active {
+    background: #d1fae5;
+    color: #065f46;
+  }
+}
+
+// ─── Modal ───────────────────────────────────────────────────────────────────
+
+.uz-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 24px;
+}
+
+.uz-modal {
+  background: $uz-white;
+  border-radius: $uz-radius;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  width: 100%;
+  max-width: 520px;
+}
+
+.uz-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid $uz-border;
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: $uz-dark;
+  }
+}
+
+.uz-modal-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: $uz-gray;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: $uz-radius-sm;
+
+  &:hover {
+    background: $uz-bg;
+    color: $uz-dark;
+  }
+}
+
+.uz-modal-body {
+  padding: 20px 22px;
+}
+
+.uz-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 22px 18px;
+  border-top: 1px solid $uz-border;
 }

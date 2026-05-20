@@ -28,6 +28,43 @@
       text-align: center;
     }
 
+    .login-alert {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 14px 16px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      line-height: 1.45;
+
+      strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      &--blocked {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+
+        strong {
+          color: #7f1d1d;
+        }
+      }
+
+      &__icon {
+        font-size: 20px;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+    }
+
     .form-group {
       margin-bottom: 20px;
 
