@@ -3,10 +3,7 @@ import { useRouter } from "next/router";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
 import { useAuth } from "@/context/AuthContext";
-import {
-  buildPdfContextFromLiveCalculator,
-  renderKalkulatorWycenaPdfAndSave,
-} from "@/utils/kalkulatorWycenaPdf";
+import { saveWycenaAndDownloadPdf } from "@/utils/kalkulatorPdfApi";
 import { computeEffectivePower } from "@/utils/mocPrzylaczeniowaSheet";
 import {
   computePrzekopQuote,
@@ -752,31 +749,17 @@ export default function SunFeeKalkulator() {
   const finalBrutto      = totalBrutto - rabatBrutto;
   const adjustedWmNetto  = calc.wmExtra - rabatNetto;
 
-  // ── Save calculation to backend ──────────────────────────────────────────
-  const [saving, setSaving] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   const clientDataOk = () => clientName.trim() !== "" && clientSurname.trim() !== "";
 
-  const saveKalkulation = async () => {
-    if (!clientDataOk()) {
-      toast.warn("Podaj imię i nazwisko klienta przed zapisaniem.");
-      return;
-    }
-    if (selectedLeadSourceId == null) {
-      toast.warn("Wybierz źródło klienta przed zapisaniem.");
-      return;
-    }
-    setSaving(true);
-    try {
-      // ── Wyciągnięte pola do szybkiego wyszukiwania (top-level) ──────────
-      const razemNetto        = parseFloat(calc.total.toFixed(2));
-      const razemBruttoVal    = parseFloat(totalBrutto.toFixed(2));
-      const finalnaKlientBrutto = parseFloat((rabatBrutto > 0 ? finalBrutto : totalBrutto).toFixed(2));
+  const buildWycenaPayload = () => {
+    const razemNetto = parseFloat(calc.total.toFixed(2));
+    const razemBruttoVal = parseFloat(totalBrutto.toFixed(2));
+    const finalnaKlientBrutto = parseFloat((rabatBrutto > 0 ? finalBrutto : totalBrutto).toFixed(2));
+    const selectedLeadSrc = leadSources.find((s) => s.id === selectedLeadSourceId) || null;
 
-      // ── Pełny snapshot kalkulacji → pole `data` na backendzie ───────────
-      const selectedLeadSrc = leadSources.find((s) => s.id === selectedLeadSourceId) || null;
-
-      const data = {
+    const data = {
         meta: {
           hasPv,
           leadSourceId: selectedLeadSrc?.id ?? null,
@@ -894,25 +877,16 @@ export default function SunFeeKalkulator() {
         },
       };
 
-      const payload = {
-        klientImie:           data.klient.imie,
-        klientNazwisko:       data.klient.nazwisko,
-        razemNetto,
-        razemBrutto:          razemBruttoVal,
-        finalnaKlientBrutto,
-        data,
-      };
-
-      await api.post("/kalkulator/wyceny", payload);
-      toast.success("Kalkulacja zapisana");
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd zapisu kalkulacji");
-    } finally {
-      setSaving(false);
-    }
+    return {
+      klientImie: data.klient.imie,
+      klientNazwisko: data.klient.nazwisko,
+      razemNetto,
+      razemBrutto: razemBruttoVal,
+      finalnaKlientBrutto,
+      data,
+    };
   };
 
-  // ── PDF generation ────────────────────────────────────────────────────────
   const generatePdf = async () => {
     if (!clientDataOk()) {
       toast.warn("Podaj imię i nazwisko klienta przed generowaniem PDF.");
@@ -922,75 +896,15 @@ export default function SunFeeKalkulator() {
       toast.warn("Wybierz źródło klienta przed generowaniem PDF.");
       return;
     }
+    setPdfGenerating(true);
     try {
-      const ctx = buildPdfContextFromLiveCalculator({
-        user,
-        offerNumber: liveOfferNumber,
-        clientName,
-        clientSurname,
-        hasPv,
-        leadSourceName: leadSources.find((s) => s.id === selectedLeadSourceId)?.name || null,
-        existingPvKwp,
-        existingMePowerKw,
-        existingMeCapacityKwh,
-        connectionKw,
-        panelOption,
-        panelCount,
-        mountType: typyMontazuList.find((t) => t.id === mountType)?.name ?? mountType ?? "",
-        panelData,
-        falownikAction,
-        falownikData:
-          falownikData && falownikLine
-            ? {
-                ...falownikData,
-                powerKw: falownikLine.totalPowerKw,
-                unitPowerKw: falownikLine.unitMocKw,
-                priceNetto: falownikLine.totalPrice,
-                unitPrices: falownikLine.unitPrices,
-                ilosc: falownikLine.quantity,
-              }
-            : null,
-        magazynData: magazynData && magazynLine
-          ? {
-              ...magazynData,
-              capacityKwh: magazynLine.totalCapacityKwh,
-              powerKw: magazynLine.totalPowerKw,
-              unitCapacityKwh: magazynLine.unitCapacityKwh,
-              unitPowerKw: magazynLine.unitPowerKw,
-              priceNetto: magazynLine.totalPrice,
-              unitPrices: magazynLine.unitPrices,
-              ilosc: magazynLine.quantity,
-              jednostka: "szt.",
-            }
-          : null,
-        rozdzielnica,
-        przekop,
-        przekopMetry,
-        przekopPrzewodTyp,
-        przekopQuote,
-        klimatyzatorMontaz,
-        klimatyzatorUrzadzenia:
-          klimatyzatorMontaz === "tak"
-            ? selectedKlimatyzatorIds
-                .map((kid) => klimatyzatoryList.find((x) => String(x.id) === String(kid)))
-                .filter(Boolean)
-                .map((k) => ({ nazwa: k.name, cenaNetto: k.priceNetto }))
-            : [],
-        wm,
-        showAllPrices,
-        calc,
-        vatRate,
-        totalBrutto,
-        rabatBrutto,
-        rabatNetto,
-        finalBrutto,
-        adjustedWmNetto,
-        falownikIloscSzt: Math.max(1, parseInt(falownikIlosc, 10) || 1),
-      });
-      await renderKalkulatorWycenaPdfAndSave(ctx);
+      await saveWycenaAndDownloadPdf(buildWycenaPayload());
+      toast.success("Kalkulacja zapisana i PDF pobrany");
     } catch (e) {
       console.error(e);
-      toast.error("Nie udało się wygenerować PDF.");
+      toast.error(e.message || e.response?.data?.message || "Nie udało się wygenerować PDF.");
+    } finally {
+      setPdfGenerating(false);
     }
   };
 
@@ -2451,14 +2365,13 @@ export default function SunFeeKalkulator() {
                 Nowa kalkulacja
               </button>
               {calc.lines.length > 0 && (
-                <>
-                  <button className="kalk-btn kalk-btn--secondary" onClick={saveKalkulation} disabled={saving || !clientDataOk()}>
-                    {saving ? "Zapisywanie..." : "Zapisz kalkulację"}
-                  </button>
-                  <button className="kalk-btn kalk-btn--primary" onClick={generatePdf} disabled={!clientDataOk()}>
-                    Generuj PDF
-                  </button>
-                </>
+                <button
+                  className="kalk-btn kalk-btn--primary"
+                  onClick={generatePdf}
+                  disabled={pdfGenerating || !clientDataOk()}
+                >
+                  {pdfGenerating ? "Generowanie PDF…" : "Generuj PDF"}
+                </button>
               )}
             </div>
           </div>

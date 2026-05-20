@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
+import { formatApiErrorMessage } from "@/utils/apiError";
 import { PrzekopUstawieniaPanel, PrzewodyCenyPanel } from "@/components/kalkulator/PrzekopPrzewodyUstawienia";
 import PrzekopyPanel from "@/components/kalkulator/PrzekopyUstawienia";
 import MontazKwpUstawienia from "@/components/kalkulator/MontazKwpUstawienia";
@@ -279,8 +280,7 @@ function FalownikiTab() {
       closeModal();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message;
-      toast.error(Array.isArray(msg) ? msg.join(", ") : msg || "Błąd zapisu");
+      toast.error(formatApiErrorMessage(e, "Nie udało się zapisać falownika"));
     } finally {
       setSaving(false);
     }
@@ -293,7 +293,7 @@ function FalownikiTab() {
       setConfirm(null);
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd dezaktywacji");
+      toast.error(formatApiErrorMessage(e, "Błąd dezaktywacji"));
     }
   };
 
@@ -482,7 +482,7 @@ function KlimatyzatoryTab() {
       closeModal();
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd zapisu");
+      toast.error(formatApiErrorMessage(e, "Błąd zapisu"));
     } finally {
       setSaving(false);
     }
@@ -495,7 +495,7 @@ function KlimatyzatoryTab() {
       setConfirm(null);
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd dezaktywacji");
+      toast.error(formatApiErrorMessage(e, "Błąd dezaktywacji"));
     }
   };
 
@@ -627,7 +627,7 @@ function PaneleTab() {
       closeModal();
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd zapisu");
+      toast.error(formatApiErrorMessage(e, "Błąd zapisu"));
     } finally {
       setSaving(false);
     }
@@ -640,7 +640,7 @@ function PaneleTab() {
       setConfirm(null);
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd dezaktywacji");
+      toast.error(formatApiErrorMessage(e, "Błąd dezaktywacji"));
     }
   };
 
@@ -795,9 +795,37 @@ function MagazynyTab() {
   };
 
   const validate = () => {
-    if (!form.name.trim())          { toast.warn("Nazwa jest wymagana"); return false; }
-    if (!form.compatibility.trim()) { toast.warn("Kompatybilność jest wymagana"); return false; }
-    if (form.wagaKg !== "" && Number(form.wagaKg) < 0) { toast.warn("Waga nie może być ujemna"); return false; }
+    if (!form.name.trim()) {
+      toast.warn("Nazwa jest wymagana");
+      return false;
+    }
+    if (!form.compatibility.trim()) {
+      toast.warn("Kompatybilność jest wymagana");
+      return false;
+    }
+    if (form.capacityKwh === "" || Number(form.capacityKwh) <= 0) {
+      toast.warn("Pojemność (kWh) musi być większa od 0");
+      return false;
+    }
+    if (form.powerKw === "" || Number(form.powerKw) <= 0) {
+      toast.warn("Moc (kW) musi być większa od 0");
+      return false;
+    }
+    if (form.wagaKg !== "" && Number(form.wagaKg) < 0) {
+      toast.warn("Waga nie może być ujemna");
+      return false;
+    }
+    try {
+      const cennik = buildCennikProgowy(form.cennikProgowy);
+      const firstPrice = cennik?.[0]?.priceNetto ?? (+form.priceNetto || 0);
+      if (!firstPrice || firstPrice <= 0) {
+        toast.warn("Podaj cenę netto w cenniku progowym (min. jedna pozycja z ceną > 0)");
+        return false;
+      }
+    } catch (e) {
+      toast.warn(e.message);
+      return false;
+    }
     return true;
   };
 
@@ -806,20 +834,25 @@ function MagazynyTab() {
     setSaving(true);
     try {
       let cennikProgowy;
-      try { cennikProgowy = buildCennikProgowy(form.cennikProgowy); }
-      catch (e) { toast.warn(e.message); setSaving(false); return; }
+      try {
+        cennikProgowy = buildCennikProgowy(form.cennikProgowy);
+      } catch (e) {
+        toast.warn(e.message);
+        setSaving(false);
+        return;
+      }
 
-      const firstPrice = cennikProgowy?.[0]?.priceNetto ?? (+form.priceNetto || undefined);
+      const firstPrice = cennikProgowy?.[0]?.priceNetto ?? (+form.priceNetto || 0);
 
       const payload = {
-        name:          form.name.trim(),
+        name: form.name.trim(),
         compatibility: form.compatibility.trim(),
-        capacityKwh:   form.capacityKwh !== "" ? +form.capacityKwh : undefined,
-        powerKw:       form.powerKw     !== "" ? +form.powerKw     : undefined,
-        wagaKg:        form.wagaKg === "" ? null : +form.wagaKg,
-        falownikiIds:  form.falownikiIds,
-        isActive:      form.isActive,
-        ...(firstPrice > 0 && { priceNetto: firstPrice }),
+        capacityKwh: +form.capacityKwh,
+        powerKw: +form.powerKw,
+        wagaKg: form.wagaKg === "" ? null : +form.wagaKg,
+        falownikiIds: form.falownikiIds,
+        isActive: form.isActive,
+        priceNetto: firstPrice,
         ...(cennikProgowy && { cennikProgowy }),
       };
 
@@ -833,8 +866,7 @@ function MagazynyTab() {
       closeModal();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message;
-      toast.error(Array.isArray(msg) ? msg.join(", ") : msg || "Błąd zapisu");
+      toast.error(formatApiErrorMessage(e, "Nie udało się zapisać magazynu"));
     } finally {
       setSaving(false);
     }
@@ -847,7 +879,7 @@ function MagazynyTab() {
       setConfirm(null);
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd dezaktywacji");
+      toast.error(formatApiErrorMessage(e, "Błąd dezaktywacji"));
     }
   };
 
@@ -948,20 +980,20 @@ function MagazynyTab() {
 
               <div className="usk-form-row">
                 <div className="usk-form-col">
-                  <label className="usk-label">Pojemność (kWh)</label>
+                  <label className="usk-label">Pojemność (kWh) *</label>
                   <input
                     className="usk-input"
-                    type="number" min="0" step="0.01"
+                    type="number" min="0.01" step="0.01" required
                     value={form.capacityKwh}
                     onChange={(e) => setForm({ ...form, capacityKwh: e.target.value })}
                     placeholder="np. 5.12"
                   />
                 </div>
                 <div className="usk-form-col">
-                  <label className="usk-label">Moc (kW)</label>
+                  <label className="usk-label">Moc (kW) *</label>
                   <input
                     className="usk-input"
-                    type="number" min="0" step="0.01"
+                    type="number" min="0.01" step="0.01" required
                     value={form.powerKw}
                     onChange={(e) => setForm({ ...form, powerKw: e.target.value })}
                     placeholder="np. 2.56"
@@ -979,9 +1011,9 @@ function MagazynyTab() {
               />
               <p className="usk-hint">Używana w kalkulatorze przy ostrzeżeniu o transporcie i montażu.</p>
 
-              <label className="usk-label">Cennik progowy (zł netto)</label>
+              <label className="usk-label">Cennik progowy (zł netto) *</label>
               <p className="usk-hint" style={{ marginTop: 0 }}>
-                Cena netto od danej sztuki (np. krok 1 = od 1. baterii, krok 3 = od 3.). Kroki unikalne, min. 1.
+                Cena netto od danej sztuki (np. krok 1 = od 1. baterii, krok 3 = od 3.). Kroki unikalne, min. 1 pozycja z ceną &gt; 0.
               </p>
               <CennikProgowyEditor
                 tiers={form.cennikProgowy}
@@ -1090,8 +1122,7 @@ function TypMontazuTab() {
       closeModal();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message;
-      toast.error(Array.isArray(msg) ? msg.join(", ") : msg || "Błąd zapisu");
+      toast.error(formatApiErrorMessage(e, "Błąd zapisu"));
     } finally {
       setSaving(false);
     }
@@ -1104,7 +1135,7 @@ function TypMontazuTab() {
       setConfirm(null);
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd dezaktywacji");
+      toast.error(formatApiErrorMessage(e, "Błąd dezaktywacji"));
     }
   };
 
@@ -1114,7 +1145,7 @@ function TypMontazuTab() {
       toast.success("Typ montażu aktywowany");
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd aktywacji");
+      toast.error(formatApiErrorMessage(e, "Błąd aktywacji"));
     }
   };
 
@@ -1294,7 +1325,7 @@ function LeadSourcesTab() {
       closeModal();
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd zapisu");
+      toast.error(formatApiErrorMessage(e, "Błąd zapisu"));
     } finally {
       setSaving(false);
     }
@@ -1307,7 +1338,7 @@ function LeadSourcesTab() {
       setConfirm(null);
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd dezaktywacji");
+      toast.error(formatApiErrorMessage(e, "Błąd dezaktywacji"));
     }
   };
 
@@ -1317,7 +1348,7 @@ function LeadSourcesTab() {
       toast.success("Źródło leadu aktywowane");
       load();
     } catch (e) {
-      toast.error(e.response?.data?.message || "Błąd aktywacji");
+      toast.error(formatApiErrorMessage(e, "Błąd aktywacji"));
     }
   };
 

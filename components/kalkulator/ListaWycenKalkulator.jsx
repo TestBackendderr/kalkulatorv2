@@ -2,10 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
 import { useAuth } from "@/context/AuthContext";
-import {
-  buildPdfContextFromSavedRecord,
-  renderKalkulatorWycenaPdfAndSave,
-} from "@/utils/kalkulatorWycenaPdf";
+import { downloadWycenaPdf } from "@/utils/kalkulatorPdfApi";
 
 const fmt = (n) =>
   new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
@@ -24,17 +21,18 @@ function DetailModal({ id, onClose }) {
   const [pdfBusy, setPdfBusy] = useState(false);
   const { user } = useAuth();
   const showAllPrices = user?.role === "Administrator";
-  const showAllPricesInPdf = user?.role !== "Handlowiec";
 
   const handleGenerujPdf = async () => {
     if (!data) return;
     setPdfBusy(true);
     try {
-      const ctx = buildPdfContextFromSavedRecord(data, showAllPricesInPdf);
-      await renderKalkulatorWycenaPdfAndSave(ctx);
+      await downloadWycenaPdf(id, {
+        klientImie: data.klientImie,
+        klientNazwisko: data.klientNazwisko,
+      });
     } catch (e) {
       console.error(e);
-      toast.error("Nie udało się wygenerować PDF");
+      toast.error(e.message || "Nie udało się wygenerować PDF");
     } finally {
       setPdfBusy(false);
     }
@@ -264,7 +262,6 @@ export default function ListaWycenKalkulator() {
 
   const { user } = useAuth();
   const isAdmin = user?.role === "Administrator";
-  const showAllPricesInPdf = user?.role !== "Handlowiec";
   const [pdfLoadingId, setPdfLoadingId] = useState(null);
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -330,15 +327,16 @@ export default function ListaWycenKalkulator() {
     }
   };
 
-  const handleGenerujPdfFromList = async (rowId) => {
-    setPdfLoadingId(rowId);
+  const handleGenerujPdfFromList = async (row) => {
+    setPdfLoadingId(row.id);
     try {
-      const r = await api.get(`/kalkulator/wyceny/${rowId}`);
-      const ctx = buildPdfContextFromSavedRecord(r.data, showAllPricesInPdf);
-      await renderKalkulatorWycenaPdfAndSave(ctx);
+      await downloadWycenaPdf(row.id, {
+        klientImie: row.klientImie,
+        klientNazwisko: row.klientNazwisko,
+      });
     } catch (e) {
       console.error(e);
-      toast.error("Nie udało się wygenerować PDF");
+      toast.error(e.message || "Nie udało się wygenerować PDF");
     } finally {
       setPdfLoadingId(null);
     }
@@ -402,7 +400,7 @@ export default function ListaWycenKalkulator() {
                         type="button"
                         className="lwk-btn lwk-btn--sm"
                         disabled={pdfLoadingId === it.id}
-                        onClick={() => handleGenerujPdfFromList(it.id)}
+                        onClick={() => handleGenerujPdfFromList(it)}
                       >
                         {pdfLoadingId === it.id ? "PDF…" : "Generuj PDF"}
                       </button>
