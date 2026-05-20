@@ -1127,6 +1127,13 @@ export default function SunFeeKalkulator() {
                     )}
                   </div>
                 )}
+                {panelsKwpPreview && (
+                  <div>
+                    Moc instalacji (z paneli): <strong>{fmtKwp(panelsKwpPreview.kwp)} kWp</strong>
+                    {" "}
+                    ({panelsKwpPreview.n} × {panelsKwpPreview.powerW} W)
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1161,7 +1168,7 @@ export default function SunFeeKalkulator() {
             ) : null}
             {falPodgladMocKw != null && (
               <div>
-                Moc łącznie (falownik): {falPodgladMocKw} kW
+                Moc Falownika: {falPodgladMocKw} kW
                 {falownikLine && falownikLine.quantity > 1 && falownikUnitMocKw > 0 && (
                   <> ({falownikUnitMocKw} kW × {falownikLine.quantity})</>
                 )}

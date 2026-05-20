@@ -481,6 +481,12 @@ export async function renderKalkulatorWycenaPdfAndSave(ctx) {
     const pricePart = showAllPrices && panelData.priceNetto ? ` — ${fmtPdf(panelData.priceNetto)} zł/szt.` : "";
     krokLine(`Panel: ${panelData.name} (${panelData.powerW}W)${pricePart}`);
   }
+  if (panelCountNum > 0 && panelData?.powerW > 0) {
+    const panelsKwp = (panelCountNum * Number(panelData.powerW)) / 1000;
+    krokLine(
+      `Moc instalacji (z paneli): ${fmtPdfKwhKw(panelsKwp)} kWp (${panelCountNum} × ${panelData.powerW} W)`,
+    );
+  }
   y += 2;
 
   // Krok 3: Falownik
