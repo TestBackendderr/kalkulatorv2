@@ -243,6 +243,18 @@ $kalk-radius-sm: 6px;
 
   &--short { max-width: 180px; }
 
+  &--readonly {
+    background: #f3f4f6;
+    color: #6b7280;
+    cursor: not-allowed;
+    border-color: #e5e7eb;
+
+    &:focus {
+      border-color: #e5e7eb;
+      box-shadow: none;
+    }
+  }
+
   &--error {
     border-color: #c0392b;
     background: #fff8f7;

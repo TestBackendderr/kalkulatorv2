@@ -301,6 +301,15 @@ export default function SunFeeKalkulator() {
     return computeFalownikLine(falownikData, qty, falownikUnitMocKw);
   }, [falownikData, falownikIlosc, falownikUnitMocKw]);
 
+  const falownikMocLacznieKw = useMemo(() => {
+    if (falownikLine?.totalPowerKw > 0) return falownikLine.totalPowerKw;
+    if (falownikUnitMocKw > 0) {
+      const qty = Math.max(1, parseInt(falownikIlosc, 10) || 1);
+      return Math.round(falownikUnitMocKw * qty * 100) / 100;
+    }
+    return null;
+  }, [falownikLine, falownikUnitMocKw, falownikIlosc]);
+
   const falownikCatalogPowerKw = useMemo(() => {
     if (falownikSource === "custom") return null;
     const f = falownikiList.find((x) => String(x.id) === String(selectedFalownik));
@@ -338,6 +347,26 @@ export default function SunFeeKalkulator() {
     const qty = Math.max(1, parseInt(String(magazynIlosc), 10) || 1);
     return computeMagazynLine(magazynData, qty);
   }, [magazynData, magazynIlosc]);
+
+  const magazynRazemZKlientem = useMemo(() => {
+    if (magazynId === "none" || !magazynLine) return null;
+    const clientKwh =
+      hasPv === "tak" ? parseFloat(String(existingMeCapacityKwh).replace(",", ".")) || 0 : 0;
+    const clientKw =
+      hasPv === "tak" ? parseFloat(String(existingMePowerKw).replace(",", ".")) || 0 : 0;
+    return {
+      clientKwh,
+      clientKw,
+      totalKwh: Math.round((magazynLine.totalCapacityKwh + clientKwh) * 100) / 100,
+      totalKw: Math.round((magazynLine.totalPowerKw + clientKw) * 100) / 100,
+    };
+  }, [
+    magazynId,
+    magazynLine,
+    hasPv,
+    existingMeCapacityKwh,
+    existingMePowerKw,
+  ]);
 
   useEffect(() => {
     if (magazynId === "none") setMagazynIlosc("1");
@@ -423,6 +452,7 @@ export default function SunFeeKalkulator() {
       a8: pvKwpCalc,
       b8: falKwCalc,
       c8: meKwCalc,
+      newPanelsKwp,
     } = computeEffectivePower({
       existingPvKwp,
       panelCount,
@@ -446,7 +476,8 @@ export default function SunFeeKalkulator() {
       add(`Panele (${count} × ${fmt(panelData.price)} zł)`, panelCost);
       add(`Konstrukcja – ${constructLabel} (${count} × ${fmt(constructPricePerPanel)} zł)`, constructCost);
 
-      const montazKwp = computeMontazKwpQuote(pvKwpCalc);
+      // Montaż PV — tylko nowa/rozbudowa (bez mocy istniejącej instalacji klienta)
+      const montazKwp = computeMontazKwpQuote(newPanelsKwp);
       if (montazKwp.isValid) {
         add(
           `Montaż PV (${fmtKwp(montazKwp.kwp)} kWp × ${fmt(montazKwp.cenaZaKwp)} zł/kWp)`,
@@ -482,10 +513,7 @@ export default function SunFeeKalkulator() {
       const priceNote =
         meSzt > 1 && breakdown ? ` (${breakdown} zł)` : "";
       add(`${meLabel}${priceNote}`, magazynLine.totalPrice);
-      add(
-        meSzt > 1 ? `Montaż magazynu energii (${meSzt} szt.)` : "Montaż magazynu energii",
-        FIXED.montazME * meSzt
-      );
+      add("Montaż magazynu energii", FIXED.montazME);
     }
 
     // Rozdzielnica
@@ -618,31 +646,13 @@ export default function SunFeeKalkulator() {
       if (!numOk(falownikIlosc, 1) || !Number.isInteger(Number(falownikIlosc))) return false;
       if (falownikAction === "wymiana") {
         if (falownikSource === "list") {
-          if (falownikiList.length === 0 || selectedFalownik == null) return false;
-          if (falownikData) {
-            const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-            if (!Number.isFinite(p) || p <= 0) return false;
-          }
-          return true;
-        }
-        if (falownikSource === "custom") {
-          const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-          return Number.isFinite(p) && p > 0;
+          return falownikiList.length > 0 && selectedFalownik != null;
         }
         return true;
       }
       if (falownikAction === "bez_wymiany") {
         if (falownikSource === "list") {
-          if (falownikiList.length === 0 || selectedFalownik == null) return false;
-          if (falownikData) {
-            const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-            if (!Number.isFinite(p) || p <= 0) return false;
-          }
-          return true;
-        }
-        if (falownikSource === "custom") {
-          const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-          return Number.isFinite(p) && p > 0;
+          return falownikiList.length > 0 && selectedFalownik != null;
         }
         return true;
       }
@@ -715,16 +725,6 @@ export default function SunFeeKalkulator() {
         toast.warn("Podaj całkowitą ilość falowników (minimum 1).");
       } else if (falownikSource === "list" && (falownikiList.length === 0 || selectedFalownik == null)) {
         toast.warn("Wybierz model falownika z katalogu.");
-      } else if (falownikSource === "custom") {
-        const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-        if (!Number.isFinite(p) || p <= 0) {
-          toast.warn("Podaj moc paneli (kW) z falownika — liczba większa od zera.");
-        }
-      } else if (falownikSource === "list" && falownikData) {
-        const p = parseFloat(String(falownikMocPaneliKw).replace(",", "."));
-        if (!Number.isFinite(p) || p <= 0) {
-          toast.warn("Podaj moc paneli (kW) z falownika — liczba większa od zera.");
-        }
       } else {
         toast.warn("Wybierz opcję falownika i — przy wyborze z listy — wskaż model z katalogu.");
       }
@@ -1808,10 +1808,13 @@ export default function SunFeeKalkulator() {
               <>
                 <div className="kalk-divider" />
                 <label className="kalk-label">Dane Falownika</label>
-                <div className="kalk-input-hint">
-                  Moc paneli (kW) z falownika: możesz wpisać własną wartość. Przy wyborze z listy domyślnie
-                  podpowiadana jest moc z katalogu; przy falowniku spoza listy — wpisz moc ręcznie (kW).
-                </div>
+                <p style={{ margin: "0 0 12px", lineHeight: 1.45 }}>
+                  Łączna moc instalacji klienta + rozbudowa którą proponujesz to{" "}
+                  <em style={{ fontStyle: "italic" }}>
+                    {falownikMocLacznieKw != null ? fmtKwp(falownikMocLacznieKw) : "—"}
+                  </em>{" "}
+                  kW
+                </p>
                 <div className="kalk-row kalk-row--top">
                   <div className="kalk-col">
                     <label className="kalk-label kalk-label--sm" htmlFor="kalk-fal-ilosc">
@@ -1827,42 +1830,15 @@ export default function SunFeeKalkulator() {
                       onChange={(e) => setFalownikIlosc(e.target.value)}
                     />
                   </div>
-                  <div className="kalk-col">
-                    <label className="kalk-label kalk-label--sm" htmlFor="kalk-fal-moc-paneli">
-                      Moc Paneli (kW) – Z Falownika
-                    </label>
-                    <input
-                      id="kalk-fal-moc-paneli"
-                      type="text"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      disabled={!(falownikData || falownikSource === "custom")}
-                      className="kalk-input"
-                      placeholder="np. 12,5"
-                      value={falownikData || falownikSource === "custom" ? falownikMocPaneliKw : "—"}
-                      onChange={(e) =>
-                        setFalownikMocPaneliKw(e.target.value.replace(/[^\d.,]/g, ""))
-                      }
-                    />
-                  </div>
-                  <div className="kalk-col">
+                  <div className="kalk-col" style={{ display: "none" }} aria-hidden="true">
                     <label className="kalk-label kalk-label--sm">Moc łącznie</label>
                     <input
                       type="text"
                       readOnly
                       className="kalk-input kalk-input--short"
+                      tabIndex={-1}
                       value={
-                        falownikLine
-                          ? `${falownikLine.totalPowerKw} kW`
-                          : falownikUnitMocKw > 0
-                            ? `${(
-                                Math.round(
-                                  falownikUnitMocKw *
-                                    Math.max(1, parseInt(falownikIlosc, 10) || 1) *
-                                    100,
-                                ) / 100
-                              )} kW`
-                            : "—"
+                        falownikMocLacznieKw != null ? `${fmtKwp(falownikMocLacznieKw)} kW` : "—"
                       }
                     />
                   </div>
@@ -1888,54 +1864,6 @@ export default function SunFeeKalkulator() {
         {step === 3 && (
           <div className="kalk-section">
             <h2 className="kalk-section-title">Magazyn energii</h2>
-
-            <label className="kalk-label">Bateria × ilość</label>
-            <div className="kalk-input-hint">
-              Wybierz model baterii i liczbę sztuk. Pojemność i moc sumują się automatycznie. Cena netto to suma
-              cennika progowego (1. bateria + 2. bateria + …).
-            </div>
-            <div className="kalk-row kalk-row--top">
-              <div className="kalk-col">
-                <label className="kalk-label kalk-label--sm">Nazwa</label>
-                <input
-                  type="text"
-                  readOnly
-                  className="kalk-input"
-                  value={magazynData?.name ?? ""}
-                  placeholder="—"
-                />
-              </div>
-              <div className="kalk-col">
-                <label className="kalk-label kalk-label--sm">Ilość baterii</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="99"
-                  disabled={magazynId === "none"}
-                  className="kalk-input kalk-input--short"
-                  value={magazynId !== "none" ? magazynIlosc : ""}
-                  onChange={(e) => setMagazynIlosc(e.target.value.replace(/[^\d]/g, ""))}
-                />
-              </div>
-              <div className="kalk-col">
-                <label className="kalk-label kalk-label--sm">Pojemność łącznie</label>
-                <input
-                  type="text"
-                  readOnly
-                  className="kalk-input kalk-input--short"
-                  value={magazynLine ? `${magazynLine.totalCapacityKwh} kWh` : "—"}
-                />
-              </div>
-              <div className="kalk-col">
-                <label className="kalk-label kalk-label--sm">Moc łącznie</label>
-                <input
-                  type="text"
-                  readOnly
-                  className="kalk-input kalk-input--short"
-                  value={magazynLine ? `${magazynLine.totalPowerKw} kW` : "—"}
-                />
-              </div>
-            </div>
 
             {falownikSource === "custom" ? (
               <div className="kalk-info-box kalk-info-box--warn">
@@ -1980,6 +1908,92 @@ export default function SunFeeKalkulator() {
                   })}
                 </div>
 
+                {magazynId !== "none" && magazynData && (
+                  <>
+                    <div className="kalk-divider" style={{ marginTop: 20 }} />
+                    <div className="kalk-row kalk-row--top">
+                      <div className="kalk-col">
+                        <label className="kalk-label kalk-label--sm">Nazwa</label>
+                        <input
+                          type="text"
+                          readOnly
+                          tabIndex={-1}
+                          className="kalk-input kalk-input--readonly"
+                          value={magazynData.name ?? ""}
+                          placeholder="—"
+                        />
+                      </div>
+                      <div className="kalk-col">
+                        <label className="kalk-label kalk-label--sm">Pojemność łącznie</label>
+                        <input
+                          type="text"
+                          readOnly
+                          tabIndex={-1}
+                          className="kalk-input kalk-input--short kalk-input--readonly"
+                          value={magazynLine ? `${magazynLine.totalCapacityKwh} kWh` : "—"}
+                        />
+                      </div>
+                      <div className="kalk-col">
+                        <label className="kalk-label kalk-label--sm">Moc łącznie</label>
+                        <input
+                          type="text"
+                          readOnly
+                          tabIndex={-1}
+                          className="kalk-input kalk-input--short kalk-input--readonly"
+                          value={magazynLine ? `${magazynLine.totalPowerKw} kW` : "—"}
+                        />
+                      </div>
+                    </div>
+
+                    <label className="kalk-label" htmlFor="kalk-magazyn-ilosc" style={{ marginTop: 16 }}>
+                      Wybierz ilość baterii
+                    </label>
+                    <input
+                      id="kalk-magazyn-ilosc"
+                      type="number"
+                      min="1"
+                      max="99"
+                      className="kalk-input kalk-input--short"
+                      value={magazynIlosc}
+                      onChange={(e) => setMagazynIlosc(e.target.value.replace(/[^\d]/g, ""))}
+                    />
+                    <p className="kalk-input-hint" style={{ marginTop: 6 }}>
+                      Pojemność i moc sumują się automatycznie według wybranej liczby sztuk.
+                    </p>
+
+                    {magazynLine && (
+                      <div
+                        className="kalk-info-box kalk-info-box--info"
+                        style={{ marginTop: 16, lineHeight: 1.5 }}
+                      >
+                        <p style={{ margin: 0 }}>
+                          Proponujesz u klienta zamontowanie{" "}
+                          <strong>{magazynData.name}</strong> w ilości{" "}
+                          <strong>{magazynLine.quantity}</strong> sztuk co da łączną pojemność{" "}
+                          <strong>{magazynLine.totalCapacityKwh} kWh</strong> oraz moc{" "}
+                          <strong>{magazynLine.totalPowerKw} kW</strong>
+                        </p>
+                        {magazynRazemZKlientem && (
+                          <p style={{ margin: "10px 0 0" }}>
+                            Łączna pojemność baterii proponowanych + baterie klienta to{" "}
+                            <strong>{magazynRazemZKlientem.totalKwh} kWh</strong> oraz moc{" "}
+                            <strong>{magazynRazemZKlientem.totalKw} kW</strong>
+                            {hasPv === "tak" &&
+                              (magazynRazemZKlientem.clientKwh > 0 ||
+                                magazynRazemZKlientem.clientKw > 0) && (
+                                <>
+                                  {" "}
+                                  (u klienta: {magazynRazemZKlientem.clientKwh} kWh /{" "}
+                                  {magazynRazemZKlientem.clientKw} kW)
+                                </>
+                              )}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
                 {magazynId !== "none" && magazynLine && showAllPrices && (
                   <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 16 }}>
                     <strong>Koszt magazynu ({magazynLine.quantity} szt.)</strong>
@@ -1994,12 +2008,21 @@ export default function SunFeeKalkulator() {
                   const sel = compatibleMagazyny.find((m) => String(m.id) === String(magazynId));
                   if (!sel) return null;
                   if (sel.wagaKg != null) {
+                    const wagaIlosc = magazynLine?.quantity ?? Math.max(1, parseInt(magazynIlosc, 10) || 1);
+                    const wagaJednostkowa = Number(sel.wagaKg);
+                    const wagaLacznie =
+                      magazynLine?.totalWeightKg ??
+                      Math.round(wagaJednostkowa * wagaIlosc * 10) / 10;
                     return (
                       <div className="kalk-info-box kalk-info-box--warn" style={{ marginTop: 16 }}>
-                        <strong>Uwaga – waga magazynu: {magazynLine?.totalWeightKg ?? sel.wagaKg} kg</strong>
+                        <strong>
+                          Uwaga – waga magazynu: {wagaIlosc} × {wagaJednostkowa} kg
+                        </strong>
                         <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.55 }}>
-                          Zwróć uwagę na miejsce montażu. Magazyn o łącznej wadze ok. <strong>{magazynLine?.totalWeightKg ?? sel.wagaKg} kg</strong> musi być łatwy do wniesienia i zamontowania.
-                          Upewnij się, że trasa wniesienia (schody, drzwi, przejścia) pozwala na transport gabarytu tej wagi.
+                          Zwróć uwagę na miejsce montażu. Magazyn o łącznej wadze ok.{" "}
+                          <strong>{wagaLacznie} kg</strong> ({wagaIlosc} × {wagaJednostkowa} kg) musi być łatwy do
+                          wniesienia i zamontowania. Upewnij się, że trasa wniesienia (schody, drzwi, przejścia)
+                          pozwala na transport gabarytu tej wagi.
                         </p>
                       </div>
                     );
