@@ -7,6 +7,9 @@ import { saveWycenaAndDownloadPdf } from "@/utils/kalkulatorPdfApi";
 import { computeEffectivePower } from "@/utils/mocPrzylaczeniowaSheet";
 import {
   computePrzekopQuote,
+  computeTrasaKablowaQuote,
+  getCablePriceForType,
+  listYkyCableOptions,
   PRZEKOP_PRZEWOD_LABELS,
   formatKopanieZakres,
 } from "@/utils/przekopSettings";
@@ -262,6 +265,9 @@ export default function SunFeeKalkulator() {
   const [przekop,           setPrzekop]           = useState("");
   const [przekopMetry,      setPrzekopMetry]      = useState("");
   const [przekopPrzewodTyp, setPrzekopPrzewodTyp] = useState("");
+  const [trasaKablowa,           setTrasaKablowa]           = useState("");
+  const [trasaKablowaMetry,      setTrasaKablowaMetry]      = useState("");
+  const [trasaKablowaReczny,     setTrasaKablowaReczny]     = useState("");
   const [klimatyzatorMontaz, setKlimatyzatorMontaz] = useState("");
   const [selectedKlimatyzatorIds, setSelectedKlimatyzatorIds] = useState([]);
 
@@ -427,6 +433,46 @@ export default function SunFeeKalkulator() {
     catalogVersion,
   ]);
 
+  const ykyCableOptions = useMemo(
+    () => listYkyCableOptions(),
+    [catalogVersion],
+  );
+
+  const trasaKablowaQuote = useMemo(() => {
+    if (trasaKablowa !== "tak") return null;
+    const metry = parseInt(trasaKablowaMetry, 10) || 0;
+    if (metry < 1) return null;
+    const { a8 } = computeEffectivePower({
+      existingPvKwp,
+      panelCount,
+      panelData,
+      falownikMocPaneliKw,
+      falownikData,
+      falownikIlosc,
+      magazynData,
+      magazynIlosc,
+    });
+    return computeTrasaKablowaQuote({
+      lengthM: metry,
+      powerKwp: a8,
+      mode: "reczny",
+      manualCableLabel: trasaKablowaReczny,
+    });
+  }, [
+    trasaKablowa,
+    trasaKablowaMetry,
+    trasaKablowaReczny,
+    existingPvKwp,
+    panelCount,
+    panelData,
+    falownikMocPaneliKw,
+    falownikData,
+    falownikIlosc,
+    magazynData,
+    magazynIlosc,
+    catalogVersion,
+  ]);
+
   // ── Calculation ───────────────────────────────────────────────────────────
 
   const calc = useMemo(() => {
@@ -527,6 +573,13 @@ export default function SunFeeKalkulator() {
       add(`Kopanie – przekop ${przekopQuote.lengthM} m`, przekopQuote.kopanieCost);
     }
 
+    if (trasaKablowa === "tak" && trasaKablowaQuote?.isValid) {
+      add(
+        `Dodatkowa trasa kablowa – ${trasaKablowaQuote.cableLabel} (${trasaKablowaQuote.lengthM} m × ${fmt(trasaKablowaQuote.pricePerM)} zł/m)`,
+        trasaKablowaQuote.cableCost,
+      );
+    }
+
     if (klimatyzatorMontaz === "tak") {
       selectedKlimatyzatorIds.forEach((kid) => {
         const k = klimatyzatoryList.find((x) => String(x.id) === String(kid));
@@ -580,6 +633,7 @@ export default function SunFeeKalkulator() {
     magazynData, magazynIlosc, magazynLine,
     rozdzielnica,
     przekop, przekopMetry, przekopQuote,
+    trasaKablowa, trasaKablowaQuote,
     klimatyzatorMontaz, selectedKlimatyzatorIds, klimatyzatoryList,
     selectedLeadSourceId, leadSources,
   ]);
@@ -662,11 +716,16 @@ export default function SunFeeKalkulator() {
       return true;
     }
     if (step === 4) {
-      if (rozdzielnica === "" || przekop === "") return false;
+      if (rozdzielnica === "" || przekop === "" || trasaKablowa === "") return false;
       if (przekop === "tak") {
         if (!przekopMetry || parseInt(przekopMetry, 10) < 1) return false;
         if (!przekopPrzewodTyp) return false;
         if (!przekopQuote?.isValid) return false;
+      }
+      if (trasaKablowa === "tak") {
+        if (!trasaKablowaMetry || parseInt(trasaKablowaMetry, 10) < 1) return false;
+        if (!trasaKablowaReczny) return false;
+        if (!trasaKablowaQuote?.isValid) return false;
       }
       if (klimatyzatorMontaz === "") return false;
       if (klimatyzatorMontaz === "tak" && selectedKlimatyzatorIds.length === 0) return false;
@@ -730,11 +789,21 @@ export default function SunFeeKalkulator() {
         toast.warn("Podaj całkowitą ilość magazynów energii (minimum 1).");
       }
     } else if (step === 4) {
-      if (klimatyzatorMontaz === "") {
-        toast.warn("Odpowiedz na pytania o rozdzielnicę, przekop i klimatyzator.");
+      if (rozdzielnica === "" || przekop === "" || trasaKablowa === "") {
+        toast.warn("Odpowiedz na pytania o rozdzielnicę, przekop, dodatkową trasę kablową i klimatyzator.");
+      } else if (trasaKablowa === "tak" && (!trasaKablowaMetry || parseInt(trasaKablowaMetry, 10) < 1)) {
+        toast.warn("Podaj długość dodatkowej trasy kablowej (min. 1 m).");
+      } else if (trasaKablowa === "tak" && !trasaKablowaReczny) {
+        toast.warn("Wybierz przewód miedziany (YKY) z cennika.");
+      } else if (trasaKablowa === "tak" && !trasaKablowaQuote?.isValid) {
+        toast.warn(
+          "Nie udało się wycenić trasy kablowej — wybierz przewód YKY z cennika i podaj długość trasy.",
+        );
+      } else if (klimatyzatorMontaz === "") {
+        toast.warn("Odpowiedz na pytanie o klimatyzator.");
       } else if (klimatyzatorMontaz === "tak" && selectedKlimatyzatorIds.length === 0) {
         toast.warn("Wybierz co najmniej jedno urządzenie z listy klimatyzatorów.");
-      } else {
+      } else if (przekop === "tak" && !przekopQuote?.isValid) {
         toast.warn(
           "Odpowiedz na pytania o rozdzielnicę i przekop; przy przekopie podaj długość, typ przewodu oraz upewnij się, że dobór przewodu jest możliwy dla mocy instalacji.",
         );
@@ -840,6 +909,12 @@ export default function SunFeeKalkulator() {
           kopanieKwotaNetto:  przekopQuote?.kopanieCost ?? null,
           mocPvKwp:           przekopQuote?.powerKwpActual ?? null,
           mocPvKwpTabela:     przekopQuote?.powerKwpUsed ?? null,
+          trasaKablowa:           trasaKablowa,
+          trasaKablowaMetry:      trasaKablowa === "tak" ? (parseInt(trasaKablowaMetry, 10) || 0) : 0,
+          trasaKablowaTryb:       trasaKablowa === "tak" ? "reczny" : null,
+          trasaKablowaPrzewod:    trasaKablowaQuote?.cableLabel ?? null,
+          trasaKablowaCenaZaMetr: trasaKablowaQuote?.pricePerM ?? null,
+          trasaKablowaKwotaNetto: trasaKablowaQuote?.cableCost ?? null,
           klimatyzator: {
             montaz: klimatyzatorMontaz,
             urzadzenia:
@@ -930,6 +1005,7 @@ export default function SunFeeKalkulator() {
     setFalownikIlosc("1");
     setFalownikMocPaneliKw("");
     setRozdzielnica(""); setPrzekop(""); setPrzekopMetry(""); setPrzekopPrzewodTyp("");
+    setTrasaKablowa(""); setTrasaKablowaMetry(""); setTrasaKablowaReczny("");
     setKlimatyzatorMontaz(""); setSelectedKlimatyzatorIds([]);
     setClientName(""); setClientSurname(""); setRabat(""); setVatRate(23);
   };
@@ -1134,6 +1210,8 @@ export default function SunFeeKalkulator() {
       const rozdzielnicaIsTak = rozdzielnica === "tak";
       const przekopIsTak = przekop === "tak";
       const pq = przekopQuote;
+      const tq = trasaKablowaQuote;
+      const trasaTak = trasaKablowa === "tak";
       const klimaTak = klimatyzatorMontaz === "tak";
       const selectedKlima = klimatyzatoryList.filter((k) =>
         selectedKlimatyzatorIds.some((id) => String(id) === String(k.id)),
@@ -1167,6 +1245,20 @@ export default function SunFeeKalkulator() {
                       — przewód {fmt(pq.cableCost)} zł + kopanie {fmt(pq.kopanieCost)} zł ={" "}
                       {fmt(pq.totalCost)} zł netto
                     </>
+                  )}
+                </>
+              )}
+            </div>
+            <div>
+              Dodatkowa trasa kablowa:{" "}
+              {trasaTak ? "TAK" : trasaKablowa === "nie" ? "NIE" : "—"}
+              {trasaTak && (
+                <>
+                  {" "}
+                  {safeText(trasaKablowaMetry)} m
+                  {tq?.cableLabel && <> · {tq.cableLabel}</>}
+                  {showAllPrices && tq?.isValid && (
+                    <> — {fmt(tq.cableCost)} zł netto</>
                   )}
                 </>
               )}
@@ -2073,6 +2165,95 @@ export default function SunFeeKalkulator() {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="kalk-divider" />
+
+            <label className="kalk-label">Czy jest wymagana dodatkowa trasa kablowa?</label>
+            <div className="kalk-radio-group">
+              <label className={`kalk-radio-card${trasaKablowa === "nie" ? " selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="trasaKablowa"
+                  value="nie"
+                  checked={trasaKablowa === "nie"}
+                  onChange={() => {
+                    setTrasaKablowa("nie");
+                    setTrasaKablowaMetry("");
+                    setTrasaKablowaReczny("");
+                  }}
+                />
+                NIE
+              </label>
+              <label className={`kalk-radio-card kalk-radio-card--warn${trasaKablowa === "tak" ? " selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="trasaKablowa"
+                  value="tak"
+                  checked={trasaKablowa === "tak"}
+                  onChange={() => setTrasaKablowa("tak")}
+                />
+                {showAllPrices ? "TAK – przewód miedziany (YKY)" : "TAK"}
+              </label>
+            </div>
+
+            {trasaKablowa === "tak" && (
+              <>
+                <div className="kalk-inline" style={{ marginTop: 12 }}>
+                  <label className="kalk-label kalk-label--sm">Długość trasy (m)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    className="kalk-input kalk-input--short"
+                    placeholder="np. 25"
+                    required={trasaKablowa === "tak"}
+                    value={trasaKablowaMetry}
+                    onChange={(e) => setTrasaKablowaMetry(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ marginTop: 10 }}>
+                  <label className="kalk-label kalk-label--sm">Przewód z cennika (YKY, miedziany)</label>
+                  <select
+                    className="kalk-select"
+                    value={trasaKablowaReczny}
+                    onChange={(e) => setTrasaKablowaReczny(e.target.value)}
+                  >
+                    <option value="">— wybierz przewód —</option>
+                    {ykyCableOptions.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                        {showAllPrices && ` — ${fmt(getCablePriceForType(name, "miedz"))} zł/m`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {trasaKablowaQuote && trasaKablowaMetry && trasaKablowaReczny && (
+                  <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 12 }}>
+                    {trasaKablowaQuote.isValid ? (
+                      <>
+                        <strong>Dobór przewodu — dodatkowa trasa</strong>
+                        <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5 }}>
+                          Przewód: <strong>{trasaKablowaQuote.cableLabel}</strong>
+                          {showAllPrices && (
+                            <>
+                              <br />
+                              {fmt(trasaKablowaQuote.pricePerM)} zł/m × {trasaKablowaQuote.lengthM} m ={" "}
+                              <strong>{fmt(trasaKablowaQuote.cableCost)} zł netto</strong>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 13, color: "#b45309" }}>
+                        Wybierz przewód YKY z cennika i podaj długość trasy.
+                      </span>
+                    )}
                   </div>
                 )}
               </>

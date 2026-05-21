@@ -152,6 +152,17 @@ function DetailModal({ id, onClose }) {
                     }`
                   : "NIE"}
               </td></tr>
+              <tr><td>Dodatkowa trasa kablowa</td><td>
+                {d?.kosztDodatkowe?.trasaKablowa === "tak"
+                  ? `TAK – ${d.kosztDodatkowe.trasaKablowaMetry ?? "—"} m${
+                      d.kosztDodatkowe.trasaKablowaPrzewod
+                        ? `, ${d.kosztDodatkowe.trasaKablowaPrzewod}`
+                        : ""
+                    }`
+                  : d?.kosztDodatkowe?.trasaKablowa === "nie"
+                    ? "NIE"
+                    : "—"}
+              </td></tr>
               <tr><td>Klimatyzator</td><td>
                 {d?.kosztDodatkowe?.klimatyzator?.montaz === "tak"
                   ? (d.kosztDodatkowe.klimatyzator.urzadzenia?.length

@@ -298,3 +298,42 @@ export const PRZEKOP_PRZEWOD_LABELS = {
   miedz: "Przewód miedziany (YKY)",
   aluminium: "Przewód aluminiowy (YAKY)",
 };
+
+/** Aktywne przewody YKY z cennika (miedziane) — do ręcznego wyboru. */
+export function listYkyCableOptions() {
+  const prices = loadYkyPrices();
+  return Object.keys(prices)
+    .filter((name) => Number(prices[name]) > 0)
+    .sort((a, b) => a.localeCompare(b, "pl"));
+}
+
+/**
+ * Dodatkowa trasa kablowa — tylko przewód miedziany (YKY), bez kopania.
+ * @param {{ lengthM: number, powerKwp: number, mode: 'tabela'|'reczny', manualCableLabel?: string }} params
+ */
+export function computeTrasaKablowaQuote({
+  lengthM,
+  powerKwp,
+  mode,
+  manualCableLabel,
+}) {
+  const metry = Math.max(0, Number(lengthM) || 0);
+  const kwpUsed = snapPowerKwp(powerKwp);
+  const cableLabel =
+    mode === "reczny"
+      ? String(manualCableLabel ?? "").trim()
+      : lookupYkyCable(metry, kwpUsed);
+  const pricePerM = getCablePriceForType(cableLabel, "miedz");
+  const cableCost = Math.round(pricePerM * metry * 100) / 100;
+
+  return {
+    cableLabel: cableLabel || "",
+    powerKwpUsed: kwpUsed,
+    powerKwpActual: Number(powerKwp) || 0,
+    lengthM: metry,
+    pricePerM,
+    cableCost,
+    mode,
+    isValid: Boolean(cableLabel) && pricePerM > 0 && metry > 0,
+  };
+}
