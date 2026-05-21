@@ -16,6 +16,7 @@ import {
 import { syncKalkulatorCatalogFromApi } from "@/utils/kalkulatorCatalogSync";
 import { computeMontazKwpQuote } from "@/utils/montazKwpSettings";
 import { computeMarzaKoncowa } from "@/utils/marzaKoncowaSettings";
+import { loadActiveDodatkoweProdukty } from "@/utils/dodatkoweProduktySettings";
 import { computeMagazynLine, formatTierBreakdown, normalizePriceTiers } from "@/utils/magazynPricing";
 import {
   computeFalownikLine,
@@ -167,6 +168,7 @@ export default function SunFeeKalkulator() {
   const [paneleList,         setPaneleList]         = useState([]);
   const [magazynyList,       setMagazynyList]       = useState([]);
   const [klimatyzatoryList,  setKlimatyzatoryList]  = useState([]);
+  const [dodatkoweProduktyList, setDodatkoweProduktyList] = useState([]);
   const [leadSources,        setLeadSources]        = useState([]);
   const [typyMontazuList,    setTypyMontazuList]    = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -199,6 +201,7 @@ export default function SunFeeKalkulator() {
       setPaneleList(activePanele);
       setMagazynyList(activeMagazyny);
       setKlimatyzatoryList(activeKlimatyzatory);
+      setDodatkoweProduktyList(loadActiveDodatkoweProdukty());
       setLeadSources(activeSources);
       setTypyMontazuList(activeTypy);
       setKopanieRanges(
@@ -217,6 +220,10 @@ export default function SunFeeKalkulator() {
   }, []);
 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
+
+  useEffect(() => {
+    if (step === 4) setDodatkoweProduktyList(loadActiveDodatkoweProdukty());
+  }, [step]);
 
   // Step 0 – existing installation
   const [hasPv,                 setHasPv]                 = useState(""); // "tak" | "nie"
@@ -270,6 +277,9 @@ export default function SunFeeKalkulator() {
   const [trasaKablowaReczny,     setTrasaKablowaReczny]     = useState("");
   const [klimatyzatorMontaz, setKlimatyzatorMontaz] = useState("");
   const [selectedKlimatyzatorIds, setSelectedKlimatyzatorIds] = useState([]);
+  const [dodatkoweProduktyWybor, setDodatkoweProduktyWybor] = useState("");
+  /** id produktu → ilość (tylko zaznaczone pozycje) */
+  const [dodatkoweProduktyQty, setDodatkoweProduktyQty] = useState({});
 
   // ── Derived data ─────────────────────────────────────────────────────────
 
@@ -473,6 +483,23 @@ export default function SunFeeKalkulator() {
     catalogVersion,
   ]);
 
+  const dodatkoweProduktyWybrane = useMemo(() => {
+    if (dodatkoweProduktyWybor !== "tak") return [];
+    return dodatkoweProduktyList
+      .map((p) => {
+        const qty = Math.max(0, parseInt(String(dodatkoweProduktyQty[p.id]), 10) || 0);
+        if (qty < 1) return null;
+        const unit = Number(p.priceNetto) || 0;
+        return { ...p, qty, lineTotal: unit * qty };
+      })
+      .filter(Boolean);
+  }, [dodatkoweProduktyWybor, dodatkoweProduktyQty, dodatkoweProduktyList]);
+
+  const dodatkoweProduktySuma = useMemo(
+    () => dodatkoweProduktyWybrane.reduce((s, p) => s + p.lineTotal, 0),
+    [dodatkoweProduktyWybrane],
+  );
+
   // ── Calculation ───────────────────────────────────────────────────────────
 
   const calc = useMemo(() => {
@@ -587,6 +614,15 @@ export default function SunFeeKalkulator() {
       });
     }
 
+    if (dodatkoweProduktyWybor === "tak") {
+      dodatkoweProduktyWybrane.forEach((p) => {
+        add(
+          `Dodatkowy produkt – ${p.name} (${p.qty} szt. × ${fmt(p.priceNetto)} zł)`,
+          p.lineTotal,
+        );
+      });
+    }
+
     // Fixed — 50% if no energy storage (panels/inverter only)
     const fixedRate = magazynData ? 1 : 0.5;
     const selectedLeadSrc = leadSources.find((s) => s.id === selectedLeadSourceId);
@@ -635,6 +671,7 @@ export default function SunFeeKalkulator() {
     przekop, przekopMetry, przekopQuote,
     trasaKablowa, trasaKablowaQuote,
     klimatyzatorMontaz, selectedKlimatyzatorIds, klimatyzatoryList,
+    dodatkoweProduktyWybor, dodatkoweProduktyWybrane,
     selectedLeadSourceId, leadSources,
   ]);
 
@@ -729,6 +766,8 @@ export default function SunFeeKalkulator() {
       }
       if (klimatyzatorMontaz === "") return false;
       if (klimatyzatorMontaz === "tak" && selectedKlimatyzatorIds.length === 0) return false;
+      if (dodatkoweProduktyWybor === "") return false;
+      if (dodatkoweProduktyWybor === "tak" && dodatkoweProduktyWybrane.length === 0) return false;
       return true;
     }
     return true;
@@ -790,7 +829,9 @@ export default function SunFeeKalkulator() {
       }
     } else if (step === 4) {
       if (rozdzielnica === "" || przekop === "" || trasaKablowa === "") {
-        toast.warn("Odpowiedz na pytania o rozdzielnicę, przekop, dodatkową trasę kablową i klimatyzator.");
+        toast.warn(
+          "Odpowiedz na pytania o rozdzielnicę, przekop, trasę kablową, klimatyzator i dodatkowe produkty.",
+        );
       } else if (trasaKablowa === "tak" && (!trasaKablowaMetry || parseInt(trasaKablowaMetry, 10) < 1)) {
         toast.warn("Podaj długość dodatkowej trasy kablowej (min. 1 m).");
       } else if (trasaKablowa === "tak" && !trasaKablowaReczny) {
@@ -803,6 +844,10 @@ export default function SunFeeKalkulator() {
         toast.warn("Odpowiedz na pytanie o klimatyzator.");
       } else if (klimatyzatorMontaz === "tak" && selectedKlimatyzatorIds.length === 0) {
         toast.warn("Wybierz co najmniej jedno urządzenie z listy klimatyzatorów.");
+      } else if (dodatkoweProduktyWybor === "") {
+        toast.warn("Odpowiedz na pytanie o dodatkowe produkty.");
+      } else if (dodatkoweProduktyWybor === "tak" && dodatkoweProduktyWybrane.length === 0) {
+        toast.warn("Zaznacz co najmniej jeden dodatkowy produkt i podaj ilość (min. 1 szt.).");
       } else if (przekop === "tak" && !przekopQuote?.isValid) {
         toast.warn(
           "Odpowiedz na pytania o rozdzielnicę i przekop; przy przekopie podaj długość, typ przewodu oraz upewnij się, że dobór przewodu jest możliwy dla mocy instalacji.",
@@ -929,6 +974,23 @@ export default function SunFeeKalkulator() {
                     }))
                 : [],
           },
+          dodatkoweProdukty: {
+            wybor: dodatkoweProduktyWybor,
+            pozycje:
+              dodatkoweProduktyWybor === "tak"
+                ? dodatkoweProduktyWybrane.map((p) => ({
+                    id: p.id,
+                    nazwa: p.name,
+                    cenaNetto: p.priceNetto,
+                    ilosc: p.qty,
+                    kwotaNetto: parseFloat(p.lineTotal.toFixed(2)),
+                  }))
+                : [],
+            sumaNetto:
+              dodatkoweProduktyWybor === "tak" && dodatkoweProduktySuma > 0
+                ? parseFloat(dodatkoweProduktySuma.toFixed(2))
+                : null,
+          },
         },
         wycena: {
           vatProcent:            vatRate,
@@ -1007,6 +1069,7 @@ export default function SunFeeKalkulator() {
     setRozdzielnica(""); setPrzekop(""); setPrzekopMetry(""); setPrzekopPrzewodTyp("");
     setTrasaKablowa(""); setTrasaKablowaMetry(""); setTrasaKablowaReczny("");
     setKlimatyzatorMontaz(""); setSelectedKlimatyzatorIds([]);
+    setDodatkoweProduktyWybor(""); setDodatkoweProduktyQty({});
     setClientName(""); setClientSurname(""); setRabat(""); setVatRate(23);
   };
 
@@ -1016,6 +1079,36 @@ export default function SunFeeKalkulator() {
         ? prev.filter((x) => String(x) !== String(id))
         : [...prev, id],
     );
+  };
+
+  const isDodatkowyProduktSelected = (id) => {
+    const q = dodatkoweProduktyQty[id];
+    return q !== undefined && q !== "" && Math.max(0, parseInt(String(q), 10) || 0) >= 1;
+  };
+
+  const toggleDodatkowyProdukt = (id) => {
+    setDodatkoweProduktyQty((prev) => {
+      const next = { ...prev };
+      if (isDodatkowyProduktSelected(id)) {
+        delete next[id];
+      } else {
+        next[id] = "1";
+      }
+      return next;
+    });
+  };
+
+  const setDodatkowyProduktQty = (id, raw) => {
+    const cleaned = raw.replace(/[^\d]/g, "");
+    setDodatkoweProduktyQty((prev) => {
+      const next = { ...prev };
+      if (!cleaned) {
+        delete next[id];
+        return next;
+      }
+      next[id] = cleaned;
+      return next;
+    });
   };
 
   const renderPriorSummary = () => {
@@ -1217,6 +1310,7 @@ export default function SunFeeKalkulator() {
         selectedKlimatyzatorIds.some((id) => String(id) === String(k.id)),
       );
       const klimaSum = selectedKlima.reduce((s, k) => s + (Number(k.priceNetto) || 0), 0);
+      const dpTak = dodatkoweProduktyWybor === "tak";
 
       blocks.push(
         <div key="s4" style={{ marginTop: 10 }}>
@@ -1277,6 +1371,30 @@ export default function SunFeeKalkulator() {
               )}
               {showAllPrices && klimaTak && selectedKlima.length > 0 && (
                 <span style={{ display: "block", marginTop: 4 }}>Razem klimatyzatory: {fmt(klimaSum)} zł netto</span>
+              )}
+            </div>
+            <div>
+              Dodatkowe produkty:{" "}
+              {dpTak ? "TAK" : dodatkoweProduktyWybor === "nie" ? "NIE" : "—"}
+              {dpTak && dodatkoweProduktyWybrane.length > 0 && (
+                <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                  {dodatkoweProduktyWybrane.map((p) => (
+                    <li key={p.id}>
+                      {p.name} — {p.qty} szt.
+                      {isAdmin && (
+                        <>
+                          {" "}
+                          ({fmt(p.priceNetto)} zł/szt. = {fmt(p.lineTotal)} zł)
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {isAdmin && dpTak && dodatkoweProduktySuma > 0 && (
+                <span style={{ display: "block", marginTop: 4 }}>
+                  Razem dodatkowe produkty: {fmt(dodatkoweProduktySuma)} zł netto
+                </span>
               )}
             </div>
           </div>
@@ -2317,6 +2435,142 @@ export default function SunFeeKalkulator() {
                         </label>
                       );
                     })}
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="kalk-divider" />
+
+            <label className="kalk-label">Czy jakieś dodatkowe produkty?</label>
+            <div className="kalk-radio-group">
+              <label className={`kalk-radio-card${dodatkoweProduktyWybor === "nie" ? " selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="dodatkoweProduktyWybor"
+                  value="nie"
+                  checked={dodatkoweProduktyWybor === "nie"}
+                  onChange={() => {
+                    setDodatkoweProduktyWybor("nie");
+                    setDodatkoweProduktyQty({});
+                  }}
+                />
+                NIE
+              </label>
+              <label
+                className={`kalk-radio-card kalk-radio-card--warn${
+                  dodatkoweProduktyWybor === "tak" ? " selected" : ""
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="dodatkoweProduktyWybor"
+                  value="tak"
+                  checked={dodatkoweProduktyWybor === "tak"}
+                  onChange={() => setDodatkoweProduktyWybor("tak")}
+                />
+                TAK
+              </label>
+            </div>
+
+            {dodatkoweProduktyWybor === "tak" && (
+              <>
+                <div className="kalk-divider" />
+                <p className="kalk-section-desc">
+                  Zaznacz produkty z listy i podaj ilość (szt.)
+                </p>
+                {dodatkoweProduktyList.length === 0 ? (
+                  <div className="kalk-info-box kalk-info-box--warn">
+                    Brak aktywnych dodatkowych produktów. Dodaj je w Ustawieniach kalkulatora →
+                    Dodatkowe produkty.
+                  </div>
+                ) : (
+                  <div className="kalk-dp-grid">
+                    {dodatkoweProduktyList.map((p) => {
+                      const selected = isDodatkowyProduktSelected(p.id);
+                      const qtyVal = dodatkoweProduktyQty[p.id] ?? "";
+                      const qtyNum = Math.max(1, parseInt(String(qtyVal), 10) || 1);
+                      const lineTotal =
+                        selected && qtyVal
+                          ? (Number(p.priceNetto) || 0) * qtyNum
+                          : 0;
+                      return (
+                        <div
+                          key={p.id}
+                          className={`kalk-dp-card${selected ? " selected" : ""}`}
+                        >
+                          <label className="kalk-dp-card-top">
+                            <input
+                              type="checkbox"
+                              className="kalk-dp-card-input"
+                              checked={selected}
+                              onChange={() => toggleDodatkowyProdukt(p.id)}
+                            />
+                            <span className="kalk-dp-card-mark" aria-hidden="true" />
+                            <span className="kalk-dp-card-name">{p.name}</span>
+                            {isAdmin && (
+                              <span className="kalk-dp-card-price">
+                                {fmt(p.priceNetto)} zł / szt.
+                              </span>
+                            )}
+                          </label>
+                          {selected && (
+                            <div
+                              className="kalk-dp-card-footer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span className="kalk-dp-card-footer-label">Ilość</span>
+                              <div className="kalk-dp-stepper">
+                                <button
+                                  type="button"
+                                  className="kalk-dp-stepper-btn"
+                                  aria-label="Zmniejsz ilość"
+                                  disabled={qtyNum <= 1}
+                                  onClick={() =>
+                                    setDodatkowyProduktQty(p.id, String(Math.max(1, qtyNum - 1)))
+                                  }
+                                >
+                                  −
+                                </button>
+                                <input
+                                  id={`dp-qty-${p.id}`}
+                                  type="number"
+                                  min="1"
+                                  max="999"
+                                  className="kalk-dp-stepper-input"
+                                  value={qtyVal}
+                                  onChange={(e) => setDodatkowyProduktQty(p.id, e.target.value)}
+                                />
+                                <button
+                                  type="button"
+                                  className="kalk-dp-stepper-btn"
+                                  aria-label="Zwiększ ilość"
+                                  disabled={qtyNum >= 999}
+                                  onClick={() =>
+                                    setDodatkowyProduktQty(p.id, String(Math.min(999, qtyNum + 1)))
+                                  }
+                                >
+                                  +
+                                </button>
+                              </div>
+                              {isAdmin && lineTotal > 0 && (
+                                <span className="kalk-dp-card-total">
+                                  {fmt(lineTotal)} zł netto
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {isAdmin && dodatkoweProduktySuma > 0 && (
+                  <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 16 }}>
+                    <strong>Razem dodatkowe produkty</strong>
+                    <p style={{ margin: "6px 0 0", fontSize: 13 }}>
+                      <strong>{fmt(dodatkoweProduktySuma)} zł netto</strong>
+                    </p>
                   </div>
                 )}
               </>

@@ -6,6 +6,7 @@ import { PrzekopUstawieniaPanel, PrzewodyCenyPanel } from "@/components/kalkulat
 import PrzekopyPanel from "@/components/kalkulator/PrzekopyUstawienia";
 import MontazKwpUstawienia from "@/components/kalkulator/MontazKwpUstawienia";
 import MarzaKoncowaUstawienia from "@/components/kalkulator/MarzaKoncowaUstawienia";
+import DodatkoweProduktyUstawienia from "@/components/kalkulator/DodatkoweProduktyUstawienia";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: "magazyny",       label: "Magazyny energii" },
   { key: "klimatyzatory",  label: "Klimatyzatory" },
   { key: "lead-sources",   label: "Koszty marketingowe" },
+  { key: "dodatkowe-produkty", label: "Dodatkowe produkty" },
   { key: "typy-montazu",       label: "Typy montażu" },
   { key: "przewody",   label: "Przewody" },
   { key: "przekopy",   label: "Przekopy" },
@@ -1484,6 +1486,7 @@ export default function UstawieniaKalkulatora() {
         {activeTab === "magazyny"           && <MagazynyTab />}
         {activeTab === "klimatyzatory"      && <KlimatyzatoryTab />}
         {activeTab === "lead-sources"       && <LeadSourcesTab />}
+        {activeTab === "dodatkowe-produkty" && <DodatkoweProduktyUstawienia />}
         {activeTab === "typy-montazu"       && <TypMontazuTab />}
         {activeTab === "przewody"           && <PrzewodyTab />}
         {activeTab === "przekopy"           && <PrzekopyPanel />}
