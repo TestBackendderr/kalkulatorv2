@@ -409,10 +409,7 @@ export default function SunFeeKalkulator() {
     paneleList,
   ]);
 
-  const przekopQuote = useMemo(() => {
-    if (przekop !== "tak" || !przekopPrzewodTyp) return null;
-    const metry = parseInt(przekopMetry, 10) || 0;
-    if (metry < 1) return null;
+  const przekopPvKwp = useMemo(() => {
     const { a8 } = computeEffectivePower({
       existingPvKwp,
       panelCount,
@@ -423,15 +420,8 @@ export default function SunFeeKalkulator() {
       magazynData,
       magazynIlosc,
     });
-    return computePrzekopQuote({
-      lengthM: metry,
-      powerKwp: a8,
-      cableType: przekopPrzewodTyp,
-    });
+    return a8;
   }, [
-    przekop,
-    przekopMetry,
-    przekopPrzewodTyp,
     existingPvKwp,
     panelCount,
     panelData,
@@ -440,6 +430,31 @@ export default function SunFeeKalkulator() {
     falownikIlosc,
     magazynData,
     magazynIlosc,
+  ]);
+
+  /** Do 10 kWp — tylko YKY; powyżej 10 kWp — YKY lub YAKY */
+  const przekopTylkoMiedz = przekopPvKwp <= 10;
+
+  useEffect(() => {
+    if (przekop === "tak" && przekopTylkoMiedz && przekopPrzewodTyp === "aluminium") {
+      setPrzekopPrzewodTyp("miedz");
+    }
+  }, [przekop, przekopTylkoMiedz, przekopPrzewodTyp]);
+
+  const przekopQuote = useMemo(() => {
+    if (przekop !== "tak" || !przekopPrzewodTyp) return null;
+    const metry = parseInt(przekopMetry, 10) || 0;
+    if (metry < 1) return null;
+    return computePrzekopQuote({
+      lengthM: metry,
+      powerKwp: przekopPvKwp,
+      cableType: przekopPrzewodTyp,
+    });
+  }, [
+    przekop,
+    przekopMetry,
+    przekopPrzewodTyp,
+    przekopPvKwp,
     catalogVersion,
   ]);
 
@@ -1864,7 +1879,7 @@ export default function SunFeeKalkulator() {
                           <span className="kf-power">{f.powerKw} kW</span>
                           {showAllPrices && (
                             <span className="kf-price">
-                              od {fmt(normalizePriceTiers(f)[0] ?? f.priceNetto)} zł
+                              {fmt(normalizePriceTiers(f)[0] ?? f.priceNetto)} zł
                             </span>
                           )}
                         </label>
@@ -2024,7 +2039,7 @@ export default function SunFeeKalkulator() {
                       )}
                       {showAllPrices && !isSelected && (
                         <span className="km-price">
-                          od {fmt(normalizePriceTiers(m)[0] ?? m.priceNetto)} zł
+                          {fmt(normalizePriceTiers(m)[0] ?? m.priceNetto)} zł
                         </span>
                       )}
                     </label>
@@ -2208,6 +2223,12 @@ export default function SunFeeKalkulator() {
             {przekop === "tak" && (
               <>
                 <label className="kalk-label kalk-label--sm" style={{ marginTop: 12 }}>Typ przewodu</label>
+                {przekopTylkoMiedz && (
+                  <p className="kalk-input-hint" style={{ marginTop: 4, marginBottom: 8 }}>
+                    Moc instalacji PV do 10 kWp ({fmt(przekopPvKwp)} kWp) — dostępny wyłącznie przewód
+                    miedziany (YKY).
+                  </p>
+                )}
                 <div className="kalk-radio-group">
                   <label className={`kalk-radio-card${przekopPrzewodTyp === "miedz" ? " selected" : ""}`}>
                     <input
@@ -2219,16 +2240,18 @@ export default function SunFeeKalkulator() {
                     />
                     Miedziany (YKY)
                   </label>
-                  <label className={`kalk-radio-card${przekopPrzewodTyp === "aluminium" ? " selected" : ""}`}>
-                    <input
-                      type="radio"
-                      name="przekopPrzewodTyp"
-                      value="aluminium"
-                      checked={przekopPrzewodTyp === "aluminium"}
-                      onChange={() => setPrzekopPrzewodTyp("aluminium")}
-                    />
-                    Aluminiowy (YAKY)
-                  </label>
+                  {!przekopTylkoMiedz && (
+                    <label className={`kalk-radio-card${przekopPrzewodTyp === "aluminium" ? " selected" : ""}`}>
+                      <input
+                        type="radio"
+                        name="przekopPrzewodTyp"
+                        value="aluminium"
+                        checked={przekopPrzewodTyp === "aluminium"}
+                        onChange={() => setPrzekopPrzewodTyp("aluminium")}
+                      />
+                      Aluminiowy (YAKY)
+                    </label>
+                  )}
                 </div>
 
                 <div className="kalk-inline">
@@ -2239,6 +2262,11 @@ export default function SunFeeKalkulator() {
                     value={przekopMetry}
                     onChange={(e) => setPrzekopMetry(e.target.value)} />
                 </div>
+                {przekop === "tak" && (parseInt(przekopMetry, 10) || 0) > 70 && (
+                  <div className="kalk-info-box kalk-info-box--warn" style={{ marginTop: 10 }}>
+                    Przekop powyżej 70 m na zamowienie
+                  </div>
+                )}
                 {przekopQuote && przekopPrzewodTyp && przekopMetry && (
                   <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 12 }}>
                     {przekopQuote.isValid ? (

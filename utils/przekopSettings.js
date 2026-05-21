@@ -299,12 +299,23 @@ export const PRZEKOP_PRZEWOD_LABELS = {
   aluminium: "Przewód aluminiowy (YAKY)",
 };
 
+/** Klucz sortowania: przekrój po „5xNN” (np. YKY 5x16 → 16). */
+function cableCrossSectionSortKey(name) {
+  const m = String(name).match(/5x(\d+)/i);
+  if (m) return Number(m[1]) || 0;
+  const nums = String(name).match(/\d+/g);
+  return nums?.length ? Number(nums[nums.length - 1]) : 0;
+}
+
 /** Aktywne przewody YKY z cennika (miedziane) — do ręcznego wyboru. */
 export function listYkyCableOptions() {
   const prices = loadYkyPrices();
   return Object.keys(prices)
     .filter((name) => Number(prices[name]) > 0)
-    .sort((a, b) => a.localeCompare(b, "pl"));
+    .sort((a, b) => {
+      const diff = cableCrossSectionSortKey(a) - cableCrossSectionSortKey(b);
+      return diff !== 0 ? diff : a.localeCompare(b, "pl");
+    });
 }
 
 /**
