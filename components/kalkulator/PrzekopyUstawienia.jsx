@@ -138,8 +138,7 @@ export default function PrzekopyPanel() {
         <div>
           <h2 className="usk-tab-title">Przekopy</h2>
           <p className="usk-panel-desc" style={{ margin: "6px 0 0" }}>
-            Cennik kopania wg długości przekopu (zł netto). Dane zapisane w bazie — używane w
-            kalkulatorze przy koszcie przekopu.
+            Cennik kopania wg długości przekopu (zł netto).
           </p>
         </div>
         <div className="usk-przekop-actions">

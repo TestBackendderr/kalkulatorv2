@@ -154,8 +154,7 @@ export default function DodatkoweProduktyUstawienia() {
         <div>
           <h2 className="usk-tab-title">Dodatkowe produkty</h2>
           <p className="usk-panel-desc" style={{ margin: "6px 0 0" }}>
-            Katalog dodatkowych produktów (nazwa + cena netto). Dane zapisane lokalnie w
-            przeglądarce do czasu podłączenia API.
+            Katalog dodatkowych produktów (nazwa + cena netto).
           </p>
         </div>
         <button type="button" className="usk-btn usk-btn--primary" onClick={openAdd}>

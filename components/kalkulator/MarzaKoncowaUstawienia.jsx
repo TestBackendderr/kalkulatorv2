@@ -75,8 +75,7 @@ export default function MarzaKoncowaUstawienia() {
         <div>
           <h2 className="usk-tab-title">Marża końcowa</h2>
           <p className="usk-panel-desc" style={{ margin: "6px 0 0" }}>
-            Procent od sumy netto wyceny (po wszystkich pozycjach, w tym WM). Dane z API{" "}
-            <code>/marza-koncowa</code>.
+            Procent od sumy netto wyceny (po wszystkich pozycjach, w tym WM).
           </p>
         </div>
       </div>

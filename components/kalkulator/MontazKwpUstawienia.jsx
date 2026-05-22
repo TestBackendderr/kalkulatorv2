@@ -141,7 +141,7 @@ export default function MontazKwpUstawienia() {
         <div>
           <h2 className="usk-tab-title">Montaż PV (kWp)</h2>
           <p className="usk-panel-desc" style={{ margin: "6px 0 0" }}>
-            Cennik z bazy (API <code>/cena-montazu</code>). W kalkulatorze:{" "}
+            Cennik montażu PV wg mocy instalacji (kWp). W kalkulatorze:{" "}
             <strong>moc instalacji PV × stawka zł/kWp</strong> z jednego progu.
           </p>
         </div>
