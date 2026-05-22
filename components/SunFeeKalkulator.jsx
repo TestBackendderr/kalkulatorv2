@@ -2470,7 +2470,7 @@ export default function SunFeeKalkulator() {
 
             <div className="kalk-divider" />
 
-            <label className="kalk-label">Czy chesz zamontowac ładowarke samochodową ?</label>
+            <label className="kalk-label">Czy chesz zamontować ładowarkę samochodową ?</label>
             <div className="kalk-radio-group">
               <label className={`kalk-radio-card${dodatkoweProduktyWybor === "nie" ? " selected" : ""}`}>
                 <input
