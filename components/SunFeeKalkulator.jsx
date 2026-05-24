@@ -323,6 +323,19 @@ export default function SunFeeKalkulator() {
     return null;
   }, [falownikLine, falownikUnitMocKw, falownikIlosc]);
 
+  const falownikProposal = useMemo(() => {
+    if (falownikAction === "" || falownikSource === "custom") return null;
+    const qty = Math.max(1, parseInt(String(falownikIlosc), 10) || 1);
+    if (!falownikData) {
+      return { name: null, qty, totalKw: null };
+    }
+    return {
+      name: falownikData.name,
+      qty,
+      totalKw: falownikMocLacznieKw,
+    };
+  }, [falownikAction, falownikSource, falownikData, falownikIlosc, falownikMocLacznieKw]);
+
   const falownikCatalogPowerKw = useMemo(() => {
     if (falownikSource === "custom") return null;
     const f = falownikiList.find((x) => String(x.id) === String(selectedFalownik));
@@ -1947,13 +1960,6 @@ export default function SunFeeKalkulator() {
               <>
                 <div className="kalk-divider" />
                 <label className="kalk-label">Dane Falownika</label>
-                <p style={{ margin: "0 0 12px", lineHeight: 1.45 }}>
-                  Łączna moc instalacji klienta + rozbudowa którą proponujesz to{" "}
-                  <em style={{ fontStyle: "italic" }}>
-                    {falownikMocLacznieKw != null ? fmtKwp(falownikMocLacznieKw) : "—"}
-                  </em>{" "}
-                  kW
-                </p>
                 <div className="kalk-row kalk-row--top">
                   <div className="kalk-col">
                     <label className="kalk-label kalk-label--sm" htmlFor="kalk-fal-ilosc">
@@ -1982,6 +1988,31 @@ export default function SunFeeKalkulator() {
                     />
                   </div>
                 </div>
+                {falownikProposal && (
+                  <div
+                    className="kalk-info-box kalk-info-box--info"
+                    style={{ marginTop: 16, lineHeight: 1.5 }}
+                  >
+                    <p style={{ margin: 0 }}>
+                      {falownikProposal.name ? (
+                        <>
+                          Proponujesz u klienta zamontowanie{" "}
+                          <strong>{falownikProposal.name}</strong> w ilości{" "}
+                          <strong>{falownikProposal.qty}</strong> sztuk
+                          {falownikProposal.totalKw != null ? (
+                            <>
+                              {" "}
+                              co da łączną moc{" "}
+                              <strong>{fmtKwp(falownikProposal.totalKw)} kW</strong>
+                            </>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>Wybierz falownik z listy, aby policzyć łączną moc.</>
+                      )}
+                    </p>
+                  </div>
+                )}
                 {showAllPrices && falownikLine && falownikData && (
                   <div className="kalk-tier-list" style={{ marginTop: 8 }}>
                     {falownikLine.unitPrices.map((p, i) => (
