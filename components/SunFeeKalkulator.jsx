@@ -2759,10 +2759,12 @@ export default function SunFeeKalkulator() {
                       <span>Rabat netto (przy {vatRate}% VAT)</span>
                       <span>{fmt(rabatNetto)} zł</span>
                     </div>
-                    <div className="kalk-rabat-row kalk-rabat-row--sm">
-                      <span>WM przed rabatem</span>
-                      <span>{fmt(calc.wmExtra)} zł netto</span>
-                    </div>
+                    {!isHandlowiec && (
+                      <div className="kalk-rabat-row kalk-rabat-row--sm">
+                        <span>WM przed rabatem</span>
+                        <span>{fmt(calc.wmExtra)} zł netto</span>
+                      </div>
+                    )}
                     <div className="kalk-rabat-row kalk-rabat-row--sm kalk-rabat-row--wm">
                       <span>WM po rabacie</span>
                       <strong style={{ color: adjustedWmNetto < 0 ? "#c00" : "inherit" }}>
