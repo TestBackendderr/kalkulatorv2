@@ -2833,7 +2833,7 @@ export default function SunFeeKalkulator() {
                   onClick={generatePdf}
                   disabled={pdfGenerating || !clientDataOk()}
                 >
-                  {pdfGenerating ? "Generowanie PDF…" : "Generuj PDF"}
+                  {pdfGenerating ? "Generowanie PDF…" : "Generuj i zapisz PDF"}
                 </button>
               )}
             </div>
