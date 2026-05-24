@@ -2720,7 +2720,7 @@ export default function SunFeeKalkulator() {
                   <table className="kalk-table">
                     <thead><tr><th>Razem</th><th>Kwota</th></tr></thead>
                     <tfoot>
-                      {calc.marzaKoncowaKwota > 0 && (
+                      {calc.marzaKoncowaKwota > 0 && !isHandlowiec && (
                         <tr className="kalk-subtotal-row">
                           <td>Suma przed marżą końcową</td>
                           <td className="kalk-td-price">{fmt(calc.razemNettoBazowe)} zł</td>
