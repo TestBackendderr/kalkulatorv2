@@ -831,17 +831,19 @@ export default function SunFeeKalkulator() {
       marketingCost * fixedRate
     );
 
-    // WM margin
+    /** Suma pozycji bez WM — baza marży końcowej (komponenty × % + WM) */
+    const razemNettoKomponenty = total;
+    const marza = computeMarzaKoncowa(razemNettoKomponenty);
+
     const wmExtra = Math.round(wmVal / 0.1) * 100;
     if (wmExtra > 0) {
       add(`WM (${wmVal} × 1 000 zł)`, wmExtra);
     }
-
-    const razemNettoBazowe = total;
-    const marza = computeMarzaKoncowa(razemNettoBazowe);
     if (marza.kwota > 0) {
       add(`Marża końcowa (${marza.percent}%)`, marza.kwota);
     }
+
+    const razemNettoBazowe = razemNettoKomponenty;
 
     const canInstallWithoutUpgrade = connKw > 0 ? effectivePower <= connKw : null;
 
@@ -3233,7 +3235,7 @@ export default function SunFeeKalkulator() {
                     <tfoot>
                       {calc.marzaKoncowaKwota > 0 && (
                         <tr className="kalk-subtotal-row">
-                          <td>Suma przed marżą końcową</td>
+                          <td>Suma komponentów (baza marży)</td>
                           <td className="kalk-td-price">{fmt(calc.razemNettoBazowe)} zł</td>
                         </tr>
                       )}
@@ -3253,7 +3255,7 @@ export default function SunFeeKalkulator() {
                     <tfoot>
                       {calc.marzaKoncowaKwota > 0 && !isHandlowiec && (
                         <tr className="kalk-subtotal-row">
-                          <td>Suma przed marżą końcową</td>
+                          <td>Suma komponentów (baza marży)</td>
                           <td className="kalk-td-price">{fmt(calc.razemNettoBazowe)} zł</td>
                         </tr>
                       )}

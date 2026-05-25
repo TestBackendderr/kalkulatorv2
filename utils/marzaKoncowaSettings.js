@@ -50,8 +50,9 @@ export function loadMarzaKoncowaMeta() {
   return { id: null, percent: DEFAULT_MARZA_KONCOWA_PERCENT };
 }
 
-export function computeMarzaKoncowa(baseNetto) {
-  const base = Number(baseNetto) || 0;
+/** Marża od bazy netto (bez WM). Końcowa suma w kalkulatorze: baza + marża + WM. */
+export function computeMarzaKoncowa(baseNettoKomponenty) {
+  const base = Number(baseNettoKomponenty) || 0;
   const percent = loadMarzaKoncowaPercent();
   if (percent <= 0 || base <= 0) {
     return { percent: 0, kwota: 0, razemPoMarzy: base };
