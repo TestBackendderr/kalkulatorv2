@@ -334,6 +334,31 @@ $kalk-radius-sm: 6px;
     border-color: #d97706;
     background: $kalk-warn-bg;
   }
+
+  &-note {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-left: 2px;
+    font-weight: 400;
+  }
+
+  &--disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+
+    &:hover {
+      border-color: $kalk-border;
+      background: $kalk-white;
+    }
+
+    &.selected {
+      border-color: $kalk-border;
+      background: $kalk-white;
+      color: $kalk-mid;
+      font-weight: 400;
+    }
+  }
 }
 
 // ─── Falownik grid ────────────────────────────────────────────────────────────
@@ -431,34 +456,44 @@ $kalk-radius-sm: 6px;
   }
 }
 
-// Dodatkowe produkty — karty w siatce (jak magazyn / klimatyzator)
+// Lista produktów (klimatyzator, dodatkowe produkty) — wiersze jak na makiecie
+.kalk-dp-panel {
+  margin-top: 4px;
+}
+
+.kalk-dp-panel .kalk-section-desc {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: $kalk-mid;
+}
+
 .kalk-dp-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .kalk-dp-card {
   display: flex;
-  flex-direction: column;
-  border: 1px solid $kalk-border;
-  border-radius: $kalk-radius;
-  background: $kalk-white;
-  box-shadow: $kalk-shadow;
+  flex-direction: row;
+  align-items: stretch;
+  border: none;
+  border-radius: 6px;
+  background: #f3f4f6;
   overflow: hidden;
-  transition: border-color .15s, box-shadow .15s, transform .12s;
+  transition: background 0.12s ease;
 
-  &:hover {
-    border-color: lighten($kalk-primary, 25%);
+  &:hover:not(.selected) {
+    background: #ebedf0;
   }
 
   &.selected {
-    border-color: $kalk-primary;
-    box-shadow: 0 0 0 1px $kalk-primary, 0 4px 14px rgba($kalk-primary, .14);
+    background: #eff6ff;
 
-    .kalk-dp-card-top {
-      background: linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%);
+    .kalk-dp-card-price,
+    .kalk-dp-card-total {
+      color: $kalk-primary;
     }
 
     .kalk-dp-card-mark {
@@ -467,7 +502,6 @@ $kalk-radius-sm: 6px;
 
       &::after {
         opacity: 1;
-        transform: scale(1);
       }
     }
   }
@@ -475,20 +509,16 @@ $kalk-radius-sm: 6px;
 
 .kalk-dp-card-top {
   display: flex;
-  flex-direction: column;
+  flex: 1;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 16px 12px 14px;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
   cursor: pointer;
   user-select: none;
-  text-align: center;
-  min-height: 88px;
-  position: relative;
-  transition: background .15s;
-
-  &:hover {
-    background: #f8fafc;
-  }
+  text-align: left;
+  background: transparent;
 }
 
 .kalk-dp-card-input {
@@ -500,69 +530,74 @@ $kalk-radius-sm: 6px;
 }
 
 .kalk-dp-card-mark {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 20px;
-  height: 20px;
-  border: 2px solid $kalk-border;
-  border-radius: 5px;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 1px solid $kalk-mid;
+  border-radius: 2px;
   background: $kalk-white;
-  transition: border-color .15s, background .15s;
+  box-sizing: border-box;
+  position: relative;
 
   &::after {
     content: "";
     position: absolute;
     left: 5px;
-    top: 2px;
-    width: 5px;
-    height: 9px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
     border: solid $kalk-white;
     border-width: 0 2px 2px 0;
-    transform: rotate(45deg) scale(0.6);
+    transform: rotate(45deg);
     opacity: 0;
-    transition: opacity .12s, transform .12s;
   }
 }
 
+.kalk-dp-card-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .kalk-dp-card-name {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: $kalk-dark;
-  line-height: 1.35;
-  padding: 0 4px;
-  margin-top: 4px;
+  line-height: 1.3;
+  word-break: break-word;
 }
 
 .kalk-dp-card-price {
-  font-size: 13px;
-  font-weight: 700;
-  color: $kalk-primary;
-  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: $kalk-gray;
+  font-variant-numeric: tabular-nums;
 }
 
 .kalk-dp-card-footer {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px 12px;
-  border-top: 1px solid #e5e7eb;
-  background: $kalk-bg;
+  flex-shrink: 0;
+  gap: 10px;
+  padding: 10px 14px 10px 8px;
+  background: transparent;
 }
 
 .kalk-dp-card-footer-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: $kalk-gray;
+  white-space: nowrap;
 }
 
 .kalk-dp-stepper {
   display: flex;
-  align-items: center;
-  gap: 0;
+  align-items: stretch;
   border: 1px solid $kalk-border;
   border-radius: $kalk-radius-sm;
   background: $kalk-white;
@@ -570,36 +605,41 @@ $kalk-radius-sm: 6px;
 }
 
 .kalk-dp-stepper-btn {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
   border: none;
+  border-right: 1px solid $kalk-border;
   background: #f3f4f6;
-  color: $kalk-mid;
-  font-size: 18px;
+  color: $kalk-dark;
+  font-size: 15px;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  transition: background .12s, color .12s;
+
+  &:last-of-type {
+    border-right: none;
+    border-left: 1px solid $kalk-border;
+  }
 
   &:hover:not(:disabled) {
     background: #e5e7eb;
-    color: $kalk-dark;
   }
 
   &:disabled {
-    opacity: 0.35;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 }
 
 .kalk-dp-stepper-input {
-  width: 48px;
-  height: 36px;
+  width: 40px;
+  min-height: 28px;
   border: none;
-  border-left: 1px solid $kalk-border;
-  border-right: 1px solid $kalk-border;
   text-align: center;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: $kalk-dark;
   background: $kalk-white;
   outline: none;
@@ -612,17 +652,28 @@ $kalk-radius-sm: 6px;
   }
 
   &:focus {
+    outline: none;
     background: #eff6ff;
   }
 }
 
 .kalk-dp-card-total {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: $kalk-primary;
-  padding: 4px 10px;
-  background: #eff6ff;
-  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.kalk-dp-sum {
+  margin-top: 10px;
+  padding: 8px 0 0;
+  font-size: 13px;
+  color: $kalk-dark;
+
+  strong {
+    font-weight: 700;
+  }
 }
 
 .kalk-tier-list {

@@ -9,6 +9,7 @@ import {
   computePrzekopQuote,
   computeTrasaKablowaQuote,
   getCablePriceForType,
+  listYakyCableOptions,
   listYkyCableOptions,
   PRZEKOP_PRZEWOD_LABELS,
   formatKopanieZakres,
@@ -272,11 +273,13 @@ export default function SunFeeKalkulator() {
   const [przekop,           setPrzekop]           = useState("");
   const [przekopMetry,      setPrzekopMetry]      = useState("");
   const [przekopPrzewodTyp, setPrzekopPrzewodTyp] = useState("");
+  const [przekopPrzewodReczny, setPrzekopPrzewodReczny] = useState("");
   const [trasaKablowa,           setTrasaKablowa]           = useState("");
   const [trasaKablowaMetry,      setTrasaKablowaMetry]      = useState("");
   const [trasaKablowaReczny,     setTrasaKablowaReczny]     = useState("");
   const [klimatyzatorMontaz, setKlimatyzatorMontaz] = useState("");
-  const [selectedKlimatyzatorIds, setSelectedKlimatyzatorIds] = useState([]);
+  /** id klimatyzatora → ilość (tylko zaznaczone pozycje) */
+  const [klimatyzatorQty, setKlimatyzatorQty] = useState({});
   const [dodatkoweProduktyWybor, setDodatkoweProduktyWybor] = useState("");
   /** id produktu → ilość (tylko zaznaczone pozycje) */
   const [dodatkoweProduktyQty, setDodatkoweProduktyQty] = useState({});
@@ -445,14 +448,56 @@ export default function SunFeeKalkulator() {
     magazynIlosc,
   ]);
 
-  /** Do 10 kWp — tylko YKY; powyżej 10 kWp — YKY lub YAKY */
-  const przekopTylkoMiedz = przekopPvKwp <= 10;
+  /** YAKY — od 20 kWp w górę; poniżej 20 kWp opcja widoczna, ale zablokowana */
+  const PRZEKOP_ALUMINIUM_MIN_KWP = 20;
+  const przekopAluminiumZablokowany = przekopPvKwp < PRZEKOP_ALUMINIUM_MIN_KWP;
 
   useEffect(() => {
-    if (przekop === "tak" && przekopTylkoMiedz && przekopPrzewodTyp === "aluminium") {
+    if (przekop === "tak" && przekopAluminiumZablokowany && przekopPrzewodTyp === "aluminium") {
       setPrzekopPrzewodTyp("miedz");
     }
-  }, [przekop, przekopTylkoMiedz, przekopPrzewodTyp]);
+  }, [przekop, przekopAluminiumZablokowany, przekopPrzewodTyp]);
+
+  const przekopRecommendedCable = useMemo(() => {
+    if (przekop !== "tak" || !przekopPrzewodTyp) return "";
+    const metry = parseInt(przekopMetry, 10) || 0;
+    if (metry < 1) return "";
+    return (
+      computePrzekopQuote({
+        lengthM: metry,
+        powerKwp: przekopPvKwp,
+        cableType: przekopPrzewodTyp,
+      }).cableLabel || ""
+    );
+  }, [przekop, przekopMetry, przekopPrzewodTyp, przekopPvKwp, catalogVersion]);
+
+  const przekopCableOptions = useMemo(() => {
+    if (przekopPrzewodTyp === "miedz") return listYkyCableOptions();
+    if (przekopPrzewodTyp === "aluminium") return listYakyCableOptions();
+    return [];
+  }, [przekopPrzewodTyp, catalogVersion]);
+
+  useEffect(() => {
+    if (przekop !== "tak" || !przekopPrzewodTyp) {
+      setPrzekopPrzewodReczny("");
+      return;
+    }
+    const metry = parseInt(przekopMetry, 10) || 0;
+    if (metry < 1) {
+      setPrzekopPrzewodReczny("");
+      return;
+    }
+    setPrzekopPrzewodReczny((prev) => {
+      if (prev && przekopCableOptions.includes(prev)) return prev;
+      return przekopRecommendedCable || "";
+    });
+  }, [
+    przekop,
+    przekopMetry,
+    przekopPrzewodTyp,
+    przekopRecommendedCable,
+    przekopCableOptions,
+  ]);
 
   const przekopQuote = useMemo(() => {
     if (przekop !== "tak" || !przekopPrzewodTyp) return null;
@@ -462,11 +507,13 @@ export default function SunFeeKalkulator() {
       lengthM: metry,
       powerKwp: przekopPvKwp,
       cableType: przekopPrzewodTyp,
+      manualCableLabel: przekopPrzewodReczny,
     });
   }, [
     przekop,
     przekopMetry,
     przekopPrzewodTyp,
+    przekopPrzewodReczny,
     przekopPvKwp,
     catalogVersion,
   ]);
@@ -510,6 +557,23 @@ export default function SunFeeKalkulator() {
     magazynIlosc,
     catalogVersion,
   ]);
+
+  const klimatyzatoryWybrane = useMemo(() => {
+    if (klimatyzatorMontaz !== "tak") return [];
+    return klimatyzatoryList
+      .map((k) => {
+        const qty = Math.max(0, parseInt(String(klimatyzatorQty[k.id]), 10) || 0);
+        if (qty < 1) return null;
+        const unit = Number(k.priceNetto) || 0;
+        return { ...k, qty, lineTotal: unit * qty };
+      })
+      .filter(Boolean);
+  }, [klimatyzatorMontaz, klimatyzatorQty, klimatyzatoryList]);
+
+  const klimatyzatorySuma = useMemo(
+    () => klimatyzatoryWybrane.reduce((s, k) => s + k.lineTotal, 0),
+    [klimatyzatoryWybrane],
+  );
 
   const dodatkoweProduktyWybrane = useMemo(() => {
     if (dodatkoweProduktyWybor !== "tak") return [];
@@ -636,9 +700,11 @@ export default function SunFeeKalkulator() {
     }
 
     if (klimatyzatorMontaz === "tak") {
-      selectedKlimatyzatorIds.forEach((kid) => {
-        const k = klimatyzatoryList.find((x) => String(x.id) === String(kid));
-        if (k) add(`Klimatyzator – ${k.name}`, Number(k.priceNetto) || 0);
+      klimatyzatoryWybrane.forEach((k) => {
+        add(
+          `Klimatyzator – ${k.name} (${k.qty} szt. × ${fmt(k.priceNetto)} zł)`,
+          k.lineTotal,
+        );
       });
     }
 
@@ -698,7 +764,7 @@ export default function SunFeeKalkulator() {
     rozdzielnica,
     przekop, przekopMetry, przekopQuote,
     trasaKablowa, trasaKablowaQuote,
-    klimatyzatorMontaz, selectedKlimatyzatorIds, klimatyzatoryList,
+    klimatyzatorMontaz, klimatyzatoryWybrane,
     dodatkoweProduktyWybor, dodatkoweProduktyWybrane,
     selectedLeadSourceId, leadSources,
   ]);
@@ -785,6 +851,7 @@ export default function SunFeeKalkulator() {
       if (przekop === "tak") {
         if (!przekopMetry || parseInt(przekopMetry, 10) < 1) return false;
         if (!przekopPrzewodTyp) return false;
+        if (!przekopPrzewodReczny) return false;
         if (!przekopQuote?.isValid) return false;
       }
       if (trasaKablowa === "tak") {
@@ -793,7 +860,7 @@ export default function SunFeeKalkulator() {
         if (!trasaKablowaQuote?.isValid) return false;
       }
       if (klimatyzatorMontaz === "") return false;
-      if (klimatyzatorMontaz === "tak" && selectedKlimatyzatorIds.length === 0) return false;
+      if (klimatyzatorMontaz === "tak" && klimatyzatoryWybrane.length === 0) return false;
       if (dodatkoweProduktyWybor === "") return false;
       if (dodatkoweProduktyWybor === "tak" && dodatkoweProduktyWybrane.length === 0) return false;
       return true;
@@ -870,15 +937,17 @@ export default function SunFeeKalkulator() {
         );
       } else if (klimatyzatorMontaz === "") {
         toast.warn("Odpowiedz na pytanie o klimatyzator.");
-      } else if (klimatyzatorMontaz === "tak" && selectedKlimatyzatorIds.length === 0) {
+      } else if (klimatyzatorMontaz === "tak" && klimatyzatoryWybrane.length === 0) {
         toast.warn("Wybierz co najmniej jedno urządzenie z listy klimatyzatorów.");
       } else if (dodatkoweProduktyWybor === "") {
         toast.warn("Odpowiedz na pytanie o dodatkowe produkty.");
       } else if (dodatkoweProduktyWybor === "tak" && dodatkoweProduktyWybrane.length === 0) {
         toast.warn("Zaznacz co najmniej jeden dodatkowy produkt i podaj ilość (min. 1 szt.).");
+      } else if (przekop === "tak" && !przekopPrzewodReczny) {
+        toast.warn("Wybierz przewód z listy w sekcji Dobór przewodu (przekop).");
       } else if (przekop === "tak" && !przekopQuote?.isValid) {
         toast.warn(
-          "Odpowiedz na pytania o rozdzielnicę i przekop; przy przekopie podaj długość, typ przewodu oraz upewnij się, że dobór przewodu jest możliwy dla mocy instalacji.",
+          "Przy przekopie podaj długość, typ przewodu i wybierz przewód z cennika (posortowane wg przekroju).",
         );
       }
     }
@@ -992,15 +1061,18 @@ export default function SunFeeKalkulator() {
             montaz: klimatyzatorMontaz,
             urzadzenia:
               klimatyzatorMontaz === "tak"
-                ? selectedKlimatyzatorIds
-                    .map((kid) => klimatyzatoryList.find((x) => String(x.id) === String(kid)))
-                    .filter(Boolean)
-                    .map((k) => ({
-                      id: k.id,
-                      nazwa: k.name,
-                      cenaNetto: k.priceNetto,
-                    }))
+                ? klimatyzatoryWybrane.map((k) => ({
+                    id: k.id,
+                    nazwa: k.name,
+                    cenaNetto: k.priceNetto,
+                    ilosc: k.qty,
+                    kwotaNetto: parseFloat(k.lineTotal.toFixed(2)),
+                  }))
                 : [],
+            sumaNetto:
+              klimatyzatorMontaz === "tak" && klimatyzatorySuma > 0
+                ? parseFloat(klimatyzatorySuma.toFixed(2))
+                : null,
           },
           dodatkoweProdukty: {
             wybor: dodatkoweProduktyWybor,
@@ -1095,18 +1167,41 @@ export default function SunFeeKalkulator() {
     setFalownikIlosc("1");
     setFalownikMocPaneliKw("");
     setRozdzielnica(""); setPrzekop(""); setPrzekopMetry(""); setPrzekopPrzewodTyp("");
+    setPrzekopPrzewodReczny("");
     setTrasaKablowa(""); setTrasaKablowaMetry(""); setTrasaKablowaReczny("");
-    setKlimatyzatorMontaz(""); setSelectedKlimatyzatorIds([]);
+    setKlimatyzatorMontaz(""); setKlimatyzatorQty({});
     setDodatkoweProduktyWybor(""); setDodatkoweProduktyQty({});
     setClientName(""); setClientSurname(""); setRabat(""); setVatRate(23);
   };
 
+  const isKlimatyzatorSelected = (id) => {
+    const q = klimatyzatorQty[id];
+    return q !== undefined && q !== "" && Math.max(0, parseInt(String(q), 10) || 0) >= 1;
+  };
+
   const toggleKlimatyzator = (id) => {
-    setSelectedKlimatyzatorIds((prev) =>
-      prev.some((x) => String(x) === String(id))
-        ? prev.filter((x) => String(x) !== String(id))
-        : [...prev, id],
-    );
+    setKlimatyzatorQty((prev) => {
+      const next = { ...prev };
+      if (isKlimatyzatorSelected(id)) {
+        delete next[id];
+      } else {
+        next[id] = "1";
+      }
+      return next;
+    });
+  };
+
+  const setKlimatyzatorQtyField = (id, raw) => {
+    const cleaned = raw.replace(/[^\d]/g, "");
+    setKlimatyzatorQty((prev) => {
+      const next = { ...prev };
+      if (!cleaned) {
+        delete next[id];
+        return next;
+      }
+      next[id] = cleaned;
+      return next;
+    });
   };
 
   const isDodatkowyProduktSelected = (id) => {
@@ -1334,10 +1429,6 @@ export default function SunFeeKalkulator() {
       const tq = trasaKablowaQuote;
       const trasaTak = trasaKablowa === "tak";
       const klimaTak = klimatyzatorMontaz === "tak";
-      const selectedKlima = klimatyzatoryList.filter((k) =>
-        selectedKlimatyzatorIds.some((id) => String(id) === String(k.id)),
-      );
-      const klimaSum = selectedKlima.reduce((s, k) => s + (Number(k.priceNetto) || 0), 0);
       const dpTak = dodatkoweProduktyWybor === "tak";
 
       blocks.push(
@@ -1387,18 +1478,25 @@ export default function SunFeeKalkulator() {
             </div>
             <div>
               Klimatyzator: {klimaTak ? "TAK" : klimatyzatorMontaz === "nie" ? "NIE" : "—"}
-              {klimaTak && selectedKlima.length > 0 && (
+              {klimaTak && klimatyzatoryWybrane.length > 0 && (
                 <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
-                  {selectedKlima.map((k) => (
+                  {klimatyzatoryWybrane.map((k) => (
                     <li key={k.id}>
-                      {k.name}
-                      {showAllPrices && <> — {fmt(k.priceNetto)} zł netto</>}
+                      {k.name} — {k.qty} szt.
+                      {showAllPrices && (
+                        <>
+                          {" "}
+                          × {fmt(k.priceNetto)} zł = {fmt(k.lineTotal)} zł netto
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>
               )}
-              {showAllPrices && klimaTak && selectedKlima.length > 0 && (
-                <span style={{ display: "block", marginTop: 4 }}>Razem klimatyzatory: {fmt(klimaSum)} zł netto</span>
+              {showAllPrices && klimaTak && klimatyzatorySuma > 0 && (
+                <span style={{ display: "block", marginTop: 4 }}>
+                  Razem klimatyzatory: {fmt(klimatyzatorySuma)} zł netto
+                </span>
               )}
             </div>
             <div>
@@ -2240,7 +2338,11 @@ export default function SunFeeKalkulator() {
               <label className={`kalk-radio-card${przekop === "nie" ? " selected" : ""}`}>
                 <input type="radio" name="przekop" value="nie"
                   checked={przekop === "nie"}
-                  onChange={() => { setPrzekop("nie"); setPrzekopPrzewodTyp(""); }} />
+                  onChange={() => {
+                    setPrzekop("nie");
+                    setPrzekopPrzewodTyp("");
+                    setPrzekopPrzewodReczny("");
+                  }} />
                 NIE
               </label>
               <label className={`kalk-radio-card kalk-radio-card--warn${przekop === "tak" ? " selected" : ""}`}>
@@ -2254,12 +2356,6 @@ export default function SunFeeKalkulator() {
             {przekop === "tak" && (
               <>
                 <label className="kalk-label kalk-label--sm" style={{ marginTop: 12 }}>Typ przewodu</label>
-                {przekopTylkoMiedz && (
-                  <p className="kalk-input-hint" style={{ marginTop: 4, marginBottom: 8 }}>
-                    Moc instalacji PV do 10 kWp ({fmt(przekopPvKwp)} kWp) — dostępny wyłącznie przewód
-                    miedziany (YKY).
-                  </p>
-                )}
                 <div className="kalk-radio-group">
                   <label className={`kalk-radio-card${przekopPrzewodTyp === "miedz" ? " selected" : ""}`}>
                     <input
@@ -2271,19 +2367,36 @@ export default function SunFeeKalkulator() {
                     />
                     Miedziany (YKY)
                   </label>
-                  {!przekopTylkoMiedz && (
-                    <label className={`kalk-radio-card${przekopPrzewodTyp === "aluminium" ? " selected" : ""}`}>
-                      <input
-                        type="radio"
-                        name="przekopPrzewodTyp"
-                        value="aluminium"
-                        checked={przekopPrzewodTyp === "aluminium"}
-                        onChange={() => setPrzekopPrzewodTyp("aluminium")}
-                      />
-                      Aluminiowy (YAKY)
-                    </label>
-                  )}
+                  <label
+                    className={`kalk-radio-card${przekopPrzewodTyp === "aluminium" ? " selected" : ""}${
+                      przekopAluminiumZablokowany ? " kalk-radio-card--disabled" : ""
+                    }`}
+                    title={
+                      przekopAluminiumZablokowany
+                        ? "Dostępne od 20 kWp mocy instalacji PV"
+                        : undefined
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name="przekopPrzewodTyp"
+                      value="aluminium"
+                      checked={przekopPrzewodTyp === "aluminium"}
+                      disabled={przekopAluminiumZablokowany}
+                      onChange={() => setPrzekopPrzewodTyp("aluminium")}
+                    />
+                    Aluminiowy (YAKY)
+                    {przekopAluminiumZablokowany && (
+                      <span className="kalk-radio-card-note">(od 20 kWp)</span>
+                    )}
+                  </label>
                 </div>
+                {przekopAluminiumZablokowany && (
+                  <p className="kalk-input-hint" style={{ marginTop: 6 }}>
+                    Przewód aluminiowy (YAKY) jest dostępny dla instalacji 20 kWp+ (moc instalacji PV:{" "}
+                    {fmt(przekopPvKwp)} kWp).
+                  </p>
+                )}
 
                 <div className="kalk-inline">
                   <label className="kalk-label kalk-label--sm">Długość przekopu (m)</label>
@@ -2298,35 +2411,56 @@ export default function SunFeeKalkulator() {
                     Przekop powyżej 70 m na zamowienie
                   </div>
                 )}
-                {przekopQuote && przekopPrzewodTyp && przekopMetry && (
+                {przekopPrzewodTyp && (parseInt(przekopMetry, 10) || 0) >= 1 && (
                   <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 12 }}>
-                    {przekopQuote.isValid ? (
-                      <>
-                        <strong>Dobór przewodu</strong>
-                        <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5 }}>
-                          Moc instalacji PV: {fmt(przekopQuote.powerKwpActual)} kWp
-                          {przekopQuote.powerKwpUsed !== przekopQuote.powerKwpActual && (
-                            <> (tabela: {przekopQuote.powerKwpUsed} kWp)</>
-                          )}
-                          <br />
-                          Przewód: <strong>{przekopQuote.cableLabel}</strong>
-                          {showAllPrices && (
-                            <>
-                              <br />
-                              Przewód: {fmt(przekopQuote.pricePerM)} zł/m × {przekopQuote.lengthM} m ={" "}
-                              <strong>{fmt(przekopQuote.cableCost)} zł</strong>
-                              <br />
-                              Kopanie: <strong>{fmt(przekopQuote.kopanieCost)} zł</strong>
-                              <br />
-                              Razem: <strong>{fmt(przekopQuote.totalCost)} zł netto</strong>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <span style={{ fontSize: 13, color: "#b45309" }}>
+                    <strong>Dobór przewodu</strong>
+                    <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5 }}>
+                      Moc instalacji PV: {fmt(przekopPvKwp)} kWp
+                      {przekopQuote &&
+                        przekopQuote.powerKwpUsed !== przekopQuote.powerKwpActual && (
+                          <> (tabela: {przekopQuote.powerKwpUsed} kWp)</>
+                        )}
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <label className="kalk-label kalk-label--sm">Przewód</label>
+                      <select
+                        className="kalk-select"
+                        value={przekopPrzewodReczny}
+                        onChange={(e) => setPrzekopPrzewodReczny(e.target.value)}
+                      >
+                        <option value="">— wybierz przewód —</option>
+                        {przekopCableOptions.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                            {showAllPrices &&
+                              ` — ${fmt(getCablePriceForType(name, przekopPrzewodTyp))} zł/m`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {przekopQuote?.isValid && (
+                      <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
+                        {showAllPrices && (
+                          <>
+                            Przewód: {fmt(przekopQuote.pricePerM)} zł/m × {przekopQuote.lengthM} m ={" "}
+                            <strong>{fmt(przekopQuote.cableCost)} zł</strong>
+                            <br />
+                            Kopanie: <strong>{fmt(przekopQuote.kopanieCost)} zł</strong>
+                            <br />
+                            Razem: <strong>{fmt(przekopQuote.totalCost)} zł netto</strong>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {przekopPrzewodReczny && przekopQuote && !przekopQuote.isValid && (
+                      <span style={{ display: "block", marginTop: 8, fontSize: 13, color: "#b45309" }}>
+                        Wybierz przewód z cennika lub sprawdź macierz w ustawieniach (Przewody / Przekopy).
+                      </span>
+                    )}
+                    {!przekopRecommendedCable && !przekopPrzewodReczny && (
+                      <span style={{ display: "block", marginTop: 8, fontSize: 13, color: "#b45309" }}>
                         Brak rekomendowanego przewodu dla podanej mocy instalacji i długości przekopu.
-                        Sprawdź macierz w ustawieniach (Przewody / Przekopy).
+                        Wybierz przewód z listy (posortowane wg przekroju).
                       </span>
                     )}
                   </div>
@@ -2448,7 +2582,7 @@ export default function SunFeeKalkulator() {
                   checked={klimatyzatorMontaz === "nie"}
                   onChange={() => {
                     setKlimatyzatorMontaz("nie");
-                    setSelectedKlimatyzatorIds([]);
+                    setKlimatyzatorQty({});
                   }}
                 />
                 NIE
@@ -2467,33 +2601,101 @@ export default function SunFeeKalkulator() {
 
             {klimatyzatorMontaz === "tak" && (
               <>
-                <div className="kalk-divider" />
-                <p className="kalk-section-desc">Wybierz urządzenia z listy</p>
+                <p className="kalk-section-desc" style={{ marginTop: 10 }}>
+                  Zaznacz produkty z listy i podaj ilość (szt.)
+                </p>
                 {klimatyzatoryList.length === 0 ? (
                   <div className="kalk-info-box kalk-info-box--warn">
                     Brak aktywnych klimatyzatorów w katalogu. Dodaj je w Ustawieniach kalkulatora.
                   </div>
                 ) : (
-                  <div className="kalk-magazyn-grid">
-                    {klimatyzatoryList.map((k) => {
-                      const selected = selectedKlimatyzatorIds.some((id) => String(id) === String(k.id));
-                      return (
-                        <label
-                          key={k.id}
-                          className={`kalk-magazyn-card${selected ? " selected" : ""}`}
-                          style={{ cursor: "pointer" }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleKlimatyzator(k.id)}
-                            style={{ marginRight: 8 }}
-                          />
-                          <span className="km-name">{k.name}</span>
-                          {showAllPrices && <span className="km-price">{fmt(k.priceNetto)} zł</span>}
-                        </label>
-                      );
-                    })}
+                  <div className="kalk-dp-panel">
+                    <div className="kalk-dp-grid">
+                      {klimatyzatoryList.map((k) => {
+                        const selected = isKlimatyzatorSelected(k.id);
+                        const qtyVal = klimatyzatorQty[k.id] ?? "";
+                        const qtyNum = Math.max(1, parseInt(String(qtyVal), 10) || 1);
+                        const lineTotal =
+                          selected && qtyVal
+                            ? (Number(k.priceNetto) || 0) * qtyNum
+                            : 0;
+                        return (
+                          <div
+                            key={k.id}
+                            className={`kalk-dp-card${selected ? " selected" : ""}`}
+                          >
+                            <label className="kalk-dp-card-top">
+                              <input
+                                type="checkbox"
+                                className="kalk-dp-card-input"
+                                checked={selected}
+                                onChange={() => toggleKlimatyzator(k.id)}
+                              />
+                              <span className="kalk-dp-card-mark" aria-hidden="true" />
+                              <span className="kalk-dp-card-info">
+                                <span className="kalk-dp-card-name">{k.name}</span>
+                                {showAllPrices && (
+                                  <span className="kalk-dp-card-price">
+                                    {fmt(k.priceNetto)} zł / szt.
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                            {selected && (
+                              <div
+                                className="kalk-dp-card-footer"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="kalk-dp-card-footer-label">Ilość</span>
+                                <div className="kalk-dp-stepper">
+                                  <button
+                                    type="button"
+                                    className="kalk-dp-stepper-btn"
+                                    aria-label="Zmniejsz ilość"
+                                    disabled={qtyNum <= 1}
+                                    onClick={() =>
+                                      setKlimatyzatorQtyField(k.id, String(Math.max(1, qtyNum - 1)))
+                                    }
+                                  >
+                                    −
+                                  </button>
+                                  <input
+                                    id={`klima-qty-${k.id}`}
+                                    type="number"
+                                    min="1"
+                                    max="999"
+                                    className="kalk-dp-stepper-input"
+                                    value={qtyVal}
+                                    onChange={(e) => setKlimatyzatorQtyField(k.id, e.target.value)}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="kalk-dp-stepper-btn"
+                                    aria-label="Zwiększ ilość"
+                                    disabled={qtyNum >= 999}
+                                    onClick={() =>
+                                      setKlimatyzatorQtyField(k.id, String(Math.min(999, qtyNum + 1)))
+                                    }
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                                {showAllPrices && lineTotal > 0 && (
+                                  <span className="kalk-dp-card-total">
+                                    {fmt(lineTotal)} zł netto
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {showAllPrices && klimatyzatorySuma > 0 && (
+                      <div className="kalk-dp-sum">
+                        <strong>Razem klimatyzatory:</strong> {fmt(klimatyzatorySuma)} zł netto
+                      </div>
+                    )}
                   </div>
                 )}
               </>
@@ -2534,8 +2736,7 @@ export default function SunFeeKalkulator() {
 
             {dodatkoweProduktyWybor === "tak" && (
               <>
-                <div className="kalk-divider" />
-                <p className="kalk-section-desc">
+                <p className="kalk-section-desc" style={{ marginTop: 10 }}>
                   Zaznacz produkty z listy i podaj ilość (szt.)
                 </p>
                 {dodatkoweProduktyList.length === 0 ? (
@@ -2544,7 +2745,8 @@ export default function SunFeeKalkulator() {
                     Dodatkowe produkty.
                   </div>
                 ) : (
-                  <div className="kalk-dp-grid">
+                  <div className="kalk-dp-panel">
+                    <div className="kalk-dp-grid">
                     {dodatkoweProduktyList.map((p) => {
                       const selected = isDodatkowyProduktSelected(p.id);
                       const qtyVal = dodatkoweProduktyQty[p.id] ?? "";
@@ -2566,12 +2768,14 @@ export default function SunFeeKalkulator() {
                               onChange={() => toggleDodatkowyProdukt(p.id)}
                             />
                             <span className="kalk-dp-card-mark" aria-hidden="true" />
-                            <span className="kalk-dp-card-name">{p.name}</span>
-                            {isAdmin && (
-                              <span className="kalk-dp-card-price">
-                                {fmt(p.priceNetto)} zł / szt.
-                              </span>
-                            )}
+                            <span className="kalk-dp-card-info">
+                              <span className="kalk-dp-card-name">{p.name}</span>
+                              {showAllPrices && (
+                                <span className="kalk-dp-card-price">
+                                  {fmt(p.priceNetto)} zł / szt.
+                                </span>
+                              )}
+                            </span>
                           </label>
                           {selected && (
                             <div
@@ -2612,7 +2816,7 @@ export default function SunFeeKalkulator() {
                                   +
                                 </button>
                               </div>
-                              {isAdmin && lineTotal > 0 && (
+                              {showAllPrices && lineTotal > 0 && (
                                 <span className="kalk-dp-card-total">
                                   {fmt(lineTotal)} zł netto
                                 </span>
@@ -2622,14 +2826,12 @@ export default function SunFeeKalkulator() {
                         </div>
                       );
                     })}
-                  </div>
-                )}
-                {isAdmin && dodatkoweProduktySuma > 0 && (
-                  <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 16 }}>
-                    <strong>Razem dodatkowe produkty</strong>
-                    <p style={{ margin: "6px 0 0", fontSize: 13 }}>
-                      <strong>{fmt(dodatkoweProduktySuma)} zł netto</strong>
-                    </p>
+                    </div>
+                    {showAllPrices && dodatkoweProduktySuma > 0 && (
+                      <div className="kalk-dp-sum">
+                        <strong>Razem dodatkowe produkty:</strong> {fmt(dodatkoweProduktySuma)} zł netto
+                      </div>
+                    )}
                   </div>
                 )}
               </>

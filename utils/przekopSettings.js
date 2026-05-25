@@ -266,15 +266,17 @@ export function getCablePriceForType(cableLabel, cableType) {
 }
 
 /**
- * @param {{ lengthM: number, powerKwp: number, cableType: 'miedz'|'aluminium' }} params
+ * @param {{ lengthM: number, powerKwp: number, cableType: 'miedz'|'aluminium', manualCableLabel?: string }} params
  */
-export function computePrzekopQuote({ lengthM, powerKwp, cableType }) {
+export function computePrzekopQuote({ lengthM, powerKwp, cableType, manualCableLabel }) {
   const metry = Math.max(0, Number(lengthM) || 0);
   const kwpUsed = snapPowerKwp(powerKwp);
-  const cableLabel =
+  const autoLabel =
     cableType === "miedz"
       ? lookupYkyCable(metry, kwpUsed)
       : lookupYakyCable(metry, kwpUsed);
+  const manual = String(manualCableLabel ?? "").trim();
+  const cableLabel = manual || autoLabel;
   const pricePerM = getCablePriceForType(cableLabel, cableType);
   const cableCost = Math.round(pricePerM * metry * 100) / 100;
   const kopanieCost = calcKopaniePrzekop(metry);
@@ -300,22 +302,35 @@ export const PRZEKOP_PRZEWOD_LABELS = {
 };
 
 /** Klucz sortowania: przekrój po „5xNN” (np. YKY 5x16 → 16). */
-function cableCrossSectionSortKey(name) {
-  const m = String(name).match(/5x(\d+)/i);
+export function cableCrossSectionSortKey(name) {
+  const m = String(name).match(/5\s*x\s*(\d+)/i);
   if (m) return Number(m[1]) || 0;
   const nums = String(name).match(/\d+/g);
   return nums?.length ? Number(nums[nums.length - 1]) : 0;
 }
 
-/** Aktywne przewody YKY z cennika (miedziane) — do ręcznego wyboru. */
+function sortCableNames(names) {
+  return [...names].sort((a, b) => {
+    const diff = cableCrossSectionSortKey(a) - cableCrossSectionSortKey(b);
+    return diff !== 0 ? diff : a.localeCompare(b, "pl");
+  });
+}
+
+function listCableOptionsFromPrices(loadPrices) {
+  const prices = loadPrices();
+  return sortCableNames(
+    Object.keys(prices).filter((name) => Number(prices[name]) > 0),
+  );
+}
+
+/** Aktywne przewody YKY z cennika (miedziane) — posortowane wg przekroju. */
 export function listYkyCableOptions() {
-  const prices = loadYkyPrices();
-  return Object.keys(prices)
-    .filter((name) => Number(prices[name]) > 0)
-    .sort((a, b) => {
-      const diff = cableCrossSectionSortKey(a) - cableCrossSectionSortKey(b);
-      return diff !== 0 ? diff : a.localeCompare(b, "pl");
-    });
+  return listCableOptionsFromPrices(loadYkyPrices);
+}
+
+/** Aktywne przewody YAKY z cennika (aluminiowe) — posortowane wg przekroju. */
+export function listYakyCableOptions() {
+  return listCableOptionsFromPrices(loadYakyPrices);
 }
 
 /**
