@@ -34,6 +34,21 @@ const FIXED = {
 /** Minimalna liczba paneli przy budowie nowego łańcucha */
 const MIN_PANELS_NEW_CHAIN = 7;
 
+const FALOWNIK_TYP_FILTER_OPTIONS = [
+  { value: "", label: "Wszystkie typy" },
+  { value: "Niskopradowy", label: "Niskonapięciowy" },
+  { value: "Wysokopradowy", label: "Wysokonapięciowy" },
+];
+
+function falownikCardTitle(f) {
+  const name = String(f?.name ?? "").trim();
+  const brand = f?.brand != null ? String(f.brand).trim() : "";
+  if (!brand) return name;
+  if (!name) return brand;
+  if (name.toLowerCase().startsWith(brand.toLowerCase())) return name;
+  return `${brand} ${name}`;
+}
+
 /** Domyślna wartość pola WM (0,1 = +100 zł netto) */
 const DEFAULT_WM = "15";
 
@@ -262,6 +277,8 @@ export default function SunFeeKalkulator() {
   const [falownikAction,   setFalownikAction]   = useState("");
   const [falownikSource,   setFalownikSource]   = useState("list");
   const [selectedFalownik, setSelectedFalownik] = useState(null);
+  const [falownikFilterTyp, setFalownikFilterTyp] = useState("");
+  const [falownikFilterBrand, setFalownikFilterBrand] = useState("");
 
   useEffect(() => {
     if (falownikAction === "istnieje") {
@@ -367,6 +384,35 @@ export default function SunFeeKalkulator() {
     }
     setFalownikMocPaneliKw(String(falownikCatalogPowerKw));
   }, [falownikSource, selectedFalownik, falownikCatalogPowerKw]);
+
+  const falownikBrandOptions = useMemo(() => {
+    const brands = new Set();
+    falownikiList.forEach((f) => {
+      const b = f.brand != null ? String(f.brand).trim() : "";
+      if (b) brands.add(b);
+    });
+    return [...brands].sort((a, b) => a.localeCompare(b, "pl"));
+  }, [falownikiList]);
+
+  const falownikiFiltered = useMemo(() => {
+    return falownikiList.filter((f) => {
+      if (falownikFilterTyp && f.typ !== falownikFilterTyp) return false;
+      if (falownikFilterBrand) {
+        const b = f.brand != null ? String(f.brand).trim() : "";
+        if (b !== falownikFilterBrand) return false;
+      }
+      return true;
+    });
+  }, [falownikiList, falownikFilterTyp, falownikFilterBrand]);
+
+  useEffect(() => {
+    if (falownikSource !== "list") return;
+    if (selectedFalownik == null) return;
+    const visible = falownikiFiltered.some((f) => String(f.id) === String(selectedFalownik));
+    if (!visible) {
+      setSelectedFalownik(falownikiFiltered[0]?.id ?? null);
+    }
+  }, [falownikSource, selectedFalownik, falownikiFiltered]);
 
   // Compatibility: magazyn is compatible if its falowniki array contains the selected falownik id
   const compatibleMagazyny = useMemo(() => {
@@ -894,13 +940,21 @@ export default function SunFeeKalkulator() {
       if (!numOk(falownikIlosc, 1) || !Number.isInteger(Number(falownikIlosc))) return false;
       if (falownikAction === "wymiana") {
         if (falownikSource === "list") {
-          return falownikiList.length > 0 && selectedFalownik != null;
+          return (
+            falownikiFiltered.length > 0 &&
+            selectedFalownik != null &&
+            falownikiFiltered.some((f) => String(f.id) === String(selectedFalownik))
+          );
         }
         return true;
       }
       if (falownikAction === "bez_wymiany") {
         if (falownikSource === "list") {
-          return falownikiList.length > 0 && selectedFalownik != null;
+          return (
+            falownikiFiltered.length > 0 &&
+            selectedFalownik != null &&
+            falownikiFiltered.some((f) => String(f.id) === String(selectedFalownik))
+          );
         }
         return true;
       }
@@ -993,8 +1047,15 @@ export default function SunFeeKalkulator() {
         toast.warn("Wybierz opcję falownika.");
       } else if (!numOk(falownikIlosc, 1) || !Number.isInteger(Number(falownikIlosc))) {
         toast.warn("Podaj całkowitą ilość falowników (minimum 1).");
-      } else if (falownikSource === "list" && (falownikiList.length === 0 || selectedFalownik == null)) {
-        toast.warn("Wybierz model falownika z katalogu.");
+      } else if (
+        falownikSource === "list" &&
+        (falownikiFiltered.length === 0 || selectedFalownik == null)
+      ) {
+        toast.warn(
+          falownikiList.length === 0
+            ? "Wybierz model falownika z katalogu."
+            : "Wybierz model falownika z katalogu (dostosuj filtry marki lub typu).",
+        );
       } else {
         toast.warn("Wybierz opcję falownika i — przy wyborze z listy — wskaż model z katalogu.");
       }
@@ -1259,7 +1320,9 @@ export default function SunFeeKalkulator() {
     setPanelCount(""); setMountType(typyMontazuList[0]?.id ?? null);
     setOptymalizatorCount("0");
     setSelectedOptymalizatorId(optymalizatoryList[0]?.id ?? null);
-    setFalownikAction(""); setFalownikSource("list"); setSelectedFalownik(falownikiList[0]?.id ?? null);
+    setFalownikAction(""); setFalownikSource("list");
+    setFalownikFilterTyp(""); setFalownikFilterBrand("");
+    setSelectedFalownik(falownikiList[0]?.id ?? null);
     setMagazynId("none");
     setMagazynIlosc("1");
     setFalownikIlosc("1");
@@ -2152,23 +2215,74 @@ export default function SunFeeKalkulator() {
                   falownikiList.length === 0 ? (
                     <div className="kalk-info-box kalk-info-box--info">Brak aktywnych falowników w katalogu.</div>
                   ) : (
-                    <div className="kalk-falownik-grid">
-                      {falownikiList.map((f) => (
-                        <label key={f.id}
-                          className={`kalk-falownik-card${String(selectedFalownik) === String(f.id) ? " selected" : ""}`}>
-                          <input type="radio" name="selectedFalownik" value={f.id}
-                            checked={String(selectedFalownik) === String(f.id)}
-                            onChange={() => setSelectedFalownik(f.id)} />
-                          <span className="kf-name">{f.name}</span>
-                          <span className="kf-power">{f.powerKw} kW</span>
-                          {showAllPrices && (
-                            <span className="kf-price">
-                              {fmt(normalizePriceTiers(f)[0] ?? f.priceNetto)} zł
-                            </span>
-                          )}
-                        </label>
-                      ))}
-                    </div>
+                    <>
+                      <div className="kalk-falownik-filters kalk-row kalk-row--top">
+                        <div className="kalk-col">
+                          <label className="kalk-label kalk-label--sm">Marka</label>
+                          <select
+                            className="kalk-select"
+                            value={falownikFilterBrand}
+                            onChange={(e) => setFalownikFilterBrand(e.target.value)}
+                          >
+                            <option value="">Wszystkie marki</option>
+                            {falownikBrandOptions.map((b) => (
+                              <option key={b} value={b}>
+                                {b}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="kalk-col">
+                          <label className="kalk-label kalk-label--sm">Typ</label>
+                          <select
+                            className="kalk-select"
+                            value={falownikFilterTyp}
+                            onChange={(e) => setFalownikFilterTyp(e.target.value)}
+                          >
+                            {FALOWNIK_TYP_FILTER_OPTIONS.map((o) => (
+                              <option key={o.value || "all"} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      {falownikiFiltered.length === 0 ? (
+                        <div className="kalk-info-box kalk-info-box--warn" style={{ marginTop: 8 }}>
+                          Brak falowników dla wybranych filtrów marki i typu.
+                        </div>
+                      ) : (
+                        <div className="kalk-falownik-grid">
+                          {falownikiFiltered.map((f) => (
+                            <label
+                              key={f.id}
+                              className={`kalk-falownik-card${String(selectedFalownik) === String(f.id) ? " selected" : ""}`}
+                            >
+                              <input
+                                type="radio"
+                                name="selectedFalownik"
+                                value={f.id}
+                                checked={String(selectedFalownik) === String(f.id)}
+                                onChange={() => setSelectedFalownik(f.id)}
+                              />
+                              <span className="kf-name">{falownikCardTitle(f)}</span>
+                              <span className="kf-power">
+                                {new Intl.NumberFormat("pl-PL", {
+                                  maximumFractionDigits: 2,
+                                  minimumFractionDigits: 0,
+                                }).format(Number(f.powerKw) || 0)}{" "}
+                                kW
+                              </span>
+                              {showAllPrices && (
+                                <span className="kf-price">
+                                  {fmt(normalizePriceTiers(f)[0] ?? f.priceNetto)} zł
+                                </span>
+                              )}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )
                 )}
 
@@ -2204,18 +2318,60 @@ export default function SunFeeKalkulator() {
                   falownikiList.length === 0 ? (
                     <div className="kalk-info-box kalk-info-box--info">Brak aktywnych falowników w katalogu.</div>
                   ) : (
-                    <select className="kalk-select" value={selectedFalownik != null ? String(selectedFalownik) : ""}
-                      onChange={(e) => {
-                        const id = e.target.value;
-                        const f = falownikiList.find((x) => String(x.id) === String(id));
-                        setSelectedFalownik(f?.id ?? null);
-                      }}>
-                      {falownikiList.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.name} – {f.powerKw} kW
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <div className="kalk-falownik-filters kalk-row kalk-row--top">
+                        <div className="kalk-col">
+                          <label className="kalk-label kalk-label--sm">Marka</label>
+                          <select
+                            className="kalk-select"
+                            value={falownikFilterBrand}
+                            onChange={(e) => setFalownikFilterBrand(e.target.value)}
+                          >
+                            <option value="">Wszystkie marki</option>
+                            {falownikBrandOptions.map((b) => (
+                              <option key={b} value={b}>
+                                {b}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="kalk-col">
+                          <label className="kalk-label kalk-label--sm">Typ</label>
+                          <select
+                            className="kalk-select"
+                            value={falownikFilterTyp}
+                            onChange={(e) => setFalownikFilterTyp(e.target.value)}
+                          >
+                            {FALOWNIK_TYP_FILTER_OPTIONS.map((o) => (
+                              <option key={o.value || "all"} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      {falownikiFiltered.length === 0 ? (
+                        <div className="kalk-info-box kalk-info-box--warn">
+                          Brak falowników dla wybranych filtrów marki i typu.
+                        </div>
+                      ) : (
+                        <select
+                          className="kalk-select"
+                          value={selectedFalownik != null ? String(selectedFalownik) : ""}
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            const f = falownikiFiltered.find((x) => String(x.id) === String(id));
+                            setSelectedFalownik(f?.id ?? null);
+                          }}
+                        >
+                          {falownikiFiltered.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {f.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </>
                   )
                 )}
 

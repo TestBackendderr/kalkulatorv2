@@ -363,6 +363,11 @@ $kalk-radius-sm: 6px;
 
 // ─── Falownik grid ────────────────────────────────────────────────────────────
 
+.kalk-falownik-filters {
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
 .kalk-falownik-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

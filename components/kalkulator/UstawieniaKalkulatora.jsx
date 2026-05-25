@@ -37,6 +37,7 @@ function formatFalownikTyp(typ) {
 
 const EMPTY_FALOWNIK = {
   name: "",
+  brand: "",
   typ: "Niskopradowy",
   powerKw: "",
   priceNetto: "",
@@ -44,6 +45,11 @@ const EMPTY_FALOWNIK = {
   isActive: true,
 };
 const EMPTY_PANEL    = { name: "", powerW: "",  priceNetto: "", isActive: true };
+
+function displayOptionalField(value) {
+  const v = value != null ? String(value).trim() : "";
+  return v || "—";
+}
 const EMPTY_KLIMATYZATOR = { name: "", priceNetto: "", isActive: true };
 const EMPTY_MAGAZYN  = {
   name: "",
@@ -235,6 +241,7 @@ function FalownikiTab() {
   const openEdit = (item) => {
     setForm({
       name:          item.name,
+      brand:         item.brand ?? "",
       typ:           item.typ || "Niskopradowy",
       powerKw:       item.powerKw,
       priceNetto:    item.priceNetto ?? "",
@@ -267,6 +274,7 @@ function FalownikiTab() {
 
       const payload = {
         name:     form.name.trim(),
+        brand:    form.brand.trim() || null,
         typ:      form.typ,
         powerKw:  +form.powerKw,
         isActive: form.isActive,
@@ -316,6 +324,7 @@ function FalownikiTab() {
             <thead>
               <tr>
                 <th>Nazwa</th>
+                <th>Marka</th>
                 <th>Typ</th>
                 <th>Moc (kW)</th>
                 <th>Cennik progowy (zł netto)</th>
@@ -325,13 +334,14 @@ function FalownikiTab() {
             </thead>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={6} className="usk-empty">Brak danych</td></tr>
+                <tr><td colSpan={7} className="usk-empty">Brak danych</td></tr>
               )}
               {items.map((item) => {
                 const tiers = parseCennikProgowy(item);
                 return (
                   <tr key={item.id} className={item.isActive ? "" : "usk-row--inactive"}>
                     <td className={item.isActive ? "" : "usk-strikethrough"}>{item.name}</td>
+                    <td>{displayOptionalField(item.brand)}</td>
                     <td>{formatFalownikTyp(item.typ)}</td>
                     <td>{item.powerKw}</td>
                     <td>
@@ -371,6 +381,14 @@ function FalownikiTab() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="np. Deye SUN-8K"
+              />
+
+              <label className="usk-label">Marka</label>
+              <input
+                className="usk-input"
+                value={form.brand}
+                onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                placeholder="np. Deye (opcjonalnie)"
               />
 
               <label className="usk-label">Typ *</label>
