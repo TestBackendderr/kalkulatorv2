@@ -7,6 +7,7 @@ import PrzekopyPanel from "@/components/kalkulator/PrzekopyUstawienia";
 import MontazKwpUstawienia from "@/components/kalkulator/MontazKwpUstawienia";
 import MarzaKoncowaUstawienia from "@/components/kalkulator/MarzaKoncowaUstawienia";
 import DodatkoweProduktyUstawienia from "@/components/kalkulator/DodatkoweProduktyUstawienia";
+import OptymalizatorUstawienia from "@/components/kalkulator/OptymalizatorUstawienia";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: "panele",         label: "Panele fotowoltaiczne" },
   { key: "magazyny",       label: "Magazyny energii" },
   { key: "klimatyzatory",  label: "Klimatyzatory" },
+  { key: "optymalizator",  label: "Optymalizator" },
   { key: "lead-sources",   label: "Koszty marketingowe" },
   { key: "dodatkowe-produkty", label: "Dodatkowe produkty" },
   { key: "typy-montazu",       label: "Typy montażu" },
@@ -1485,6 +1487,7 @@ export default function UstawieniaKalkulatora() {
         {activeTab === "panele"            && <PaneleTab />}
         {activeTab === "magazyny"           && <MagazynyTab />}
         {activeTab === "klimatyzatory"      && <KlimatyzatoryTab />}
+        {activeTab === "optymalizator"      && <OptymalizatorUstawienia />}
         {activeTab === "lead-sources"       && <LeadSourcesTab />}
         {activeTab === "dodatkowe-produkty" && <DodatkoweProduktyUstawienia />}
         {activeTab === "typy-montazu"       && <TypMontazuTab />}

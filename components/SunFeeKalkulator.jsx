@@ -169,6 +169,7 @@ export default function SunFeeKalkulator() {
   const [paneleList,         setPaneleList]         = useState([]);
   const [magazynyList,       setMagazynyList]       = useState([]);
   const [klimatyzatoryList,  setKlimatyzatoryList]  = useState([]);
+  const [optymalizatoryList, setOptymalizatoryList] = useState([]);
   const [dodatkoweProduktyList, setDodatkoweProduktyList] = useState([]);
   const [leadSources,        setLeadSources]        = useState([]);
   const [typyMontazuList,    setTypyMontazuList]    = useState([]);
@@ -202,6 +203,17 @@ export default function SunFeeKalkulator() {
       setPaneleList(activePanele);
       setMagazynyList(activeMagazyny);
       setKlimatyzatoryList(activeKlimatyzatory);
+      const activeOptymalizatory = (catalog.optymalizatory || []).filter(
+        (o) => o.isActive !== false,
+      );
+      setOptymalizatoryList(activeOptymalizatory);
+      if (activeOptymalizatory.length > 0) {
+        setSelectedOptymalizatorId((prev) =>
+          prev != null && activeOptymalizatory.some((o) => o.id === prev)
+            ? prev
+            : activeOptymalizatory[0].id,
+        );
+      }
       setDodatkoweProduktyList(loadActiveDodatkoweProdukty());
       setLeadSources(activeSources);
       setTypyMontazuList(activeTypy);
@@ -243,6 +255,8 @@ export default function SunFeeKalkulator() {
   const [customPanelPrice, setCustomPanelPrice] = useState("");
   const [panelCount,       setPanelCount]       = useState("");
   const [mountType,        setMountType]        = useState(null); // ID of selected TypMontazu
+  const [optymalizatorCount, setOptymalizatorCount] = useState("0");
+  const [selectedOptymalizatorId, setSelectedOptymalizatorId] = useState(null);
 
   // Step 2 – inverter
   const [falownikAction,   setFalownikAction]   = useState("");
@@ -592,6 +606,43 @@ export default function SunFeeKalkulator() {
     [dodatkoweProduktyWybrane],
   );
 
+  const maxOptymalizatorow = useMemo(() => {
+    if (panelOption === "none" || panelOption === "") return 0;
+    return Math.max(0, parseInt(panelCount, 10) || 0);
+  }, [panelOption, panelCount]);
+
+  const selectedOptymalizator = useMemo(
+    () => optymalizatoryList.find((o) => o.id === selectedOptymalizatorId) ?? null,
+    [optymalizatoryList, selectedOptymalizatorId],
+  );
+
+  const optymalizatorIloscNum = useMemo(
+    () => Math.max(0, parseInt(optymalizatorCount, 10) || 0),
+    [optymalizatorCount],
+  );
+
+  const optymalizatorKwota = useMemo(() => {
+    if (optymalizatorIloscNum < 1 || !selectedOptymalizator) return 0;
+    return optymalizatorIloscNum * (Number(selectedOptymalizator.priceNetto) || 0);
+  }, [optymalizatorIloscNum, selectedOptymalizator]);
+
+  useEffect(() => {
+    const n = parseInt(optymalizatorCount, 10);
+    if (optymalizatorCount === "" || !Number.isFinite(n) || n < 0) {
+      setOptymalizatorCount("0");
+      return;
+    }
+    if (n > maxOptymalizatorow) {
+      setOptymalizatorCount(String(maxOptymalizatorow));
+    }
+  }, [optymalizatorCount, maxOptymalizatorow]);
+
+  useEffect(() => {
+    if (optymalizatorIloscNum > 0 && selectedOptymalizatorId == null && optymalizatoryList.length > 0) {
+      setSelectedOptymalizatorId(optymalizatoryList[0].id);
+    }
+  }, [optymalizatorIloscNum, selectedOptymalizatorId, optymalizatoryList]);
+
   // ── Calculation ───────────────────────────────────────────────────────────
 
   const calc = useMemo(() => {
@@ -650,6 +701,14 @@ export default function SunFeeKalkulator() {
       if (panelSource === "custom") {
         add("Transport i zamówienie paneli spoza listy", CUSTOM_PANEL_TRANSPORT);
       }
+    }
+
+    if (optymalizatorIloscNum > 0 && selectedOptymalizator) {
+      const unit = Number(selectedOptymalizator.priceNetto) || 0;
+      add(
+        `Optymalizator – ${selectedOptymalizator.name} (${optymalizatorIloscNum} szt. × ${fmt(unit)} zł)`,
+        optymalizatorIloscNum * unit,
+      );
     }
 
     // Inverter — cennik progowy (1. + 2. + 3. falownik…)
@@ -758,6 +817,7 @@ export default function SunFeeKalkulator() {
   }, [
     existingPvKwp, connectionKw, wm,
     panelOption, panelData, panelCount, mountType, panelSource,
+    optymalizatorIloscNum, selectedOptymalizator,
     typyMontazuList,
     falownikAction, falownikData, falownikLine, falownikMocPaneliKw, falownikSource, falownikIlosc,
     magazynData, magazynIlosc, magazynLine,
@@ -820,6 +880,12 @@ export default function SunFeeKalkulator() {
           if (!numOk(customPanelW, 0.0001)) return false;
           if (!String(customPanelNazwa).trim()) return false;
         }
+      }
+      const optCnt = Math.max(0, parseInt(optymalizatorCount, 10) || 0);
+      if (optCnt < 0 || optCnt > maxOptymalizatorow) return false;
+      if (optCnt > 0) {
+        if (optymalizatoryList.length === 0 || selectedOptymalizatorId == null) return false;
+        if (!selectedOptymalizator) return false;
       }
       return true;
     }
@@ -905,6 +971,20 @@ export default function SunFeeKalkulator() {
         !numOk(customPanelW, 0.0001)
       ) {
         toast.warn("Podaj moc panela (W) — wartość większa od zera.");
+      } else if (
+        Math.max(0, parseInt(optymalizatorCount, 10) || 0) >
+        maxOptymalizatorow
+      ) {
+        toast.warn(
+          maxOptymalizatorow === 0
+            ? "Liczba optymalizatorów może być większa od 0 tylko gdy montujesz panele (podaj ilość paneli)."
+            : `Liczba optymalizatorów nie może przekraczać liczby paneli (maks. ${maxOptymalizatorow}).`,
+        );
+      } else if (
+        Math.max(0, parseInt(optymalizatorCount, 10) || 0) > 0 &&
+        (optymalizatoryList.length === 0 || !selectedOptymalizator)
+      ) {
+        toast.warn("Wybierz typ optymalizatora z katalogu (Ustawienia → Optymalizator).");
       } else {
         toast.warn("Uzupełnij WM oraz wybór dotyczący paneli (jeśli dokładasz panele — uzupełnij wszystkie pola paneli).");
       }
@@ -1003,6 +1083,22 @@ export default function SunFeeKalkulator() {
                 cenaNettoPrzyliczona: panelData?.price || 0,
               }
             : null,
+          optymalizator:
+            optymalizatorIloscNum > 0 && selectedOptymalizator
+              ? {
+                  id: selectedOptymalizator.id,
+                  nazwa: selectedOptymalizator.name,
+                  cenaNetto: selectedOptymalizator.priceNetto,
+                  ilosc: optymalizatorIloscNum,
+                  kwotaNetto: parseFloat(optymalizatorKwota.toFixed(2)),
+                }
+              : {
+                  ilosc: optymalizatorIloscNum,
+                  id: null,
+                  nazwa: null,
+                  cenaNetto: null,
+                  kwotaNetto: 0,
+                },
         },
         falownik: {
           akcja:  falownikAction,
@@ -1161,6 +1257,8 @@ export default function SunFeeKalkulator() {
     setWm(DEFAULT_WM); setPanelOption(""); setPanelSource("list");
     setSelectedPanel(paneleList[0]?.id ?? null); setCustomPanelW(""); setCustomPanelNazwa(""); setCustomPanelPrice("");
     setPanelCount(""); setMountType(typyMontazuList[0]?.id ?? null);
+    setOptymalizatorCount("0");
+    setSelectedOptymalizatorId(optymalizatoryList[0]?.id ?? null);
     setFalownikAction(""); setFalownikSource("list"); setSelectedFalownik(falownikiList[0]?.id ?? null);
     setMagazynId("none");
     setMagazynIlosc("1");
@@ -1342,6 +1440,22 @@ export default function SunFeeKalkulator() {
                 )}
               </>
             )}
+            <div>
+              Optymalizatory: {optymalizatorIloscNum}
+              {optymalizatorIloscNum > 0 && selectedOptymalizator && (
+                <>
+                  {" "}
+                  — {selectedOptymalizator.name}
+                  {showAllPrices && (
+                    <>
+                      {" "}
+                      ({optymalizatorIloscNum} szt. × {fmt(selectedOptymalizator.priceNetto)} zł ={" "}
+                      {fmt(optymalizatorKwota)} zł netto)
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       );
@@ -1928,6 +2042,65 @@ export default function SunFeeKalkulator() {
                   </div>
                 )}
               </>
+            )}
+
+            <div className="kalk-divider" />
+
+            <label className="kalk-label kalk-label--sm">Liczba optymalizatorów</label>
+            <input
+              type="number"
+              min="0"
+              max={maxOptymalizatorow}
+              step="1"
+              className="kalk-input kalk-input--short"
+              placeholder="0"
+              value={optymalizatorCount}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^\d]/g, "");
+                setOptymalizatorCount(raw === "" ? "0" : raw);
+              }}
+            />
+            <p className="kalk-input-hint" style={{ marginTop: 4, marginBottom: 12 }}>
+              Domyślnie 0. Maksymalnie tyle, ile paneli
+              {maxOptymalizatorow > 0 ? ` (${maxOptymalizatorow})` : " (0 — najpierw podaj panele w ofercie)"}.
+            </p>
+
+            <label className="kalk-label kalk-label--sm">Typ optymalizatora (z katalogu)</label>
+            {optymalizatoryList.length === 0 ? (
+              <div className="kalk-info-box kalk-info-box--warn">
+                Brak aktywnych optymalizatorów w katalogu. Dodaj je w{" "}
+                <strong>Ustawieniach kalkulatora → Optymalizator</strong>.
+              </div>
+            ) : (
+              <select
+                className="kalk-select"
+                value={selectedOptymalizatorId ?? ""}
+                disabled={optymalizatorIloscNum < 1 || maxOptymalizatorow < 1}
+                onChange={(e) =>
+                  setSelectedOptymalizatorId(Number(e.target.value) || null)
+                }
+              >
+                {optymalizatoryList.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                    {showAllPrices ? ` — ${fmt(o.priceNetto)} zł/szt.` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+            {optymalizatoryList.length > 0 && optymalizatorIloscNum < 1 && maxOptymalizatorow > 0 && (
+              <p className="kalk-input-hint" style={{ marginTop: 4 }}>
+                Wybierz typ z listy i wpisz liczbę optymalizatorów &gt; 0, aby doliczyć koszt.
+              </p>
+            )}
+            {optymalizatorIloscNum > 0 && selectedOptymalizator && showAllPrices && (
+              <div className="kalk-info-box kalk-info-box--info" style={{ marginTop: 8 }}>
+                Koszt optymalizatorów:{" "}
+                <strong>
+                  {optymalizatorIloscNum} × {fmt(selectedOptymalizator.priceNetto)} zł ={" "}
+                  {fmt(optymalizatorKwota)} zł netto
+                </strong>
+              </div>
             )}
           </div>
         )}
