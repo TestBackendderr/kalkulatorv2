@@ -37,7 +37,7 @@ function ConfirmModal({ message, onConfirm, onCancel }) {
   );
 }
 
-export default function DodatkoweProduktyUstawienia() {
+export default function LadowarkaSamochodowaUstawienia() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -48,10 +48,10 @@ export default function DodatkoweProduktyUstawienia() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/dodatkowe-produkty");
+      const res = await api.get("/ladowarki-samochodowe");
       setItems(res.data || []);
     } catch (e) {
-      toast.error(formatApiErrorMessage(e, "Nie udało się pobrać dodatkowych produktów"));
+      toast.error(formatApiErrorMessage(e, "Nie udało się pobrać ładowarek samochodowych"));
     } finally {
       setLoading(false);
     }
@@ -100,11 +100,11 @@ export default function DodatkoweProduktyUstawienia() {
         isActive: form.isActive,
       };
       if (modal.mode === "add") {
-        await api.post("/dodatkowe-produkty", payload);
-        toast.success("Produkt dodany");
+        await api.post("/ladowarki-samochodowe", payload);
+        toast.success("Ładowarka samochodowa dodana");
       } else {
-        await api.patch(`/dodatkowe-produkty/${modal.id}`, payload);
-        toast.success("Produkt zaktualizowany");
+        await api.patch(`/ladowarki-samochodowe/${modal.id}`, payload);
+        toast.success("Ładowarka samochodowa zaktualizowana");
       }
       closeModal();
       load();
@@ -117,8 +117,8 @@ export default function DodatkoweProduktyUstawienia() {
 
   const handleDeactivate = async () => {
     try {
-      await api.delete(`/dodatkowe-produkty/${confirm}`);
-      toast.success("Produkt dezaktywowany");
+      await api.delete(`/ladowarki-samochodowe/${confirm}`);
+      toast.success("Ładowarka dezaktywowana");
       setConfirm(null);
       load();
     } catch (e) {
@@ -128,8 +128,8 @@ export default function DodatkoweProduktyUstawienia() {
 
   const handleActivate = async (id) => {
     try {
-      await api.patch(`/dodatkowe-produkty/${id}/activate`);
-      toast.success("Produkt aktywowany");
+      await api.patch(`/ladowarki-samochodowe/${id}/activate`);
+      toast.success("Ładowarka aktywowana");
       load();
     } catch (e) {
       toast.error(formatApiErrorMessage(e, "Błąd aktywacji"));
@@ -140,13 +140,13 @@ export default function DodatkoweProduktyUstawienia() {
     <>
       <div className="usk-tab-header">
         <div>
-          <h2 className="usk-tab-title">Dodatkowe produkty</h2>
+          <h2 className="usk-tab-title">Ładowarki samochodowe</h2>
           <p className="usk-panel-desc" style={{ margin: "6px 0 0" }}>
-            Katalog produktów w kroku „Koszty dodatkowe” kalkulatora.
+            Katalog urządzeń w kroku „Koszty dodatkowe” kalkulatora (montaż ładowarki EV).
           </p>
         </div>
         <button type="button" className="usk-btn usk-btn--primary" onClick={openAdd}>
-          + Dodaj produkt
+          + Dodaj
         </button>
       </div>
 
@@ -167,7 +167,7 @@ export default function DodatkoweProduktyUstawienia() {
               {items.length === 0 && (
                 <tr>
                   <td colSpan={4} className="usk-empty">
-                    Brak produktów — dodaj pierwszy
+                    Brak danych
                   </td>
                 </tr>
               )}
@@ -179,11 +179,7 @@ export default function DodatkoweProduktyUstawienia() {
                     <StatusBadge isActive={item.isActive} />
                   </td>
                   <td className="usk-actions">
-                    <button
-                      type="button"
-                      className="usk-btn usk-btn--sm"
-                      onClick={() => openEdit(item)}
-                    >
+                    <button type="button" className="usk-btn usk-btn--sm" onClick={() => openEdit(item)}>
                       Edytuj
                     </button>
                     {item.isActive ? (
@@ -215,7 +211,11 @@ export default function DodatkoweProduktyUstawienia() {
         <div className="usk-overlay" onClick={closeModal}>
           <div className="usk-modal" onClick={(e) => e.stopPropagation()}>
             <div className="usk-modal-head">
-              <h3>{modal.mode === "add" ? "Dodaj produkt" : "Edytuj produkt"}</h3>
+              <h3>
+                {modal.mode === "add"
+                  ? "Dodaj ładowarkę samochodową"
+                  : "Edytuj ładowarkę samochodową"}
+              </h3>
               <button type="button" className="usk-close" onClick={closeModal}>
                 ×
               </button>
@@ -226,7 +226,7 @@ export default function DodatkoweProduktyUstawienia() {
                 className="usk-input"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="np. Monitoring, Optymalizator"
+                placeholder="np. Wallbox 11 kW"
               />
               <label className="usk-label">Cena netto (zł) *</label>
               <input
@@ -236,7 +236,7 @@ export default function DodatkoweProduktyUstawienia() {
                 step="1"
                 value={form.priceNetto}
                 onChange={(e) => setForm({ ...form, priceNetto: e.target.value })}
-                placeholder="np. 1500"
+                placeholder="np. 4500"
               />
               <label className="usk-checkbox-label">
                 <input
@@ -264,9 +264,9 @@ export default function DodatkoweProduktyUstawienia() {
         </div>
       )}
 
-      {confirm != null && (
+      {confirm && (
         <ConfirmModal
-          message="Czy na pewno chcesz dezaktywować ten produkt?"
+          message="Czy na pewno chcesz dezaktywować tę ładowarkę?"
           onConfirm={handleDeactivate}
           onCancel={() => setConfirm(null)}
         />

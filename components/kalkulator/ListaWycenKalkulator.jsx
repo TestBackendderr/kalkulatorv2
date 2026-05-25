@@ -170,6 +170,20 @@ function DetailModal({ id, onClose }) {
                     : "TAK")
                   : d?.kosztDodatkowe?.klimatyzator?.montaz === "nie" ? "NIE" : "—"}
               </td></tr>
+              <tr><td>Ładowarka samochodowa</td><td>
+                {d?.kosztDodatkowe?.ladowarkaSamochodowa?.montaz === "tak"
+                  ? (d.kosztDodatkowe.ladowarkaSamochodowa.urzadzenia?.length
+                    ? d.kosztDodatkowe.ladowarkaSamochodowa.urzadzenia.map((u) => u.nazwa).join(", ")
+                    : "TAK")
+                  : d?.kosztDodatkowe?.ladowarkaSamochodowa?.montaz === "nie" ? "NIE" : "—"}
+              </td></tr>
+              <tr><td>Dodatkowe produkty</td><td>
+                {d?.kosztDodatkowe?.dodatkoweProdukty?.wybor === "tak"
+                  ? (d.kosztDodatkowe.dodatkoweProdukty.pozycje?.length
+                    ? d.kosztDodatkowe.dodatkoweProdukty.pozycje.map((u) => u.nazwa).join(", ")
+                    : "TAK")
+                  : d?.kosztDodatkowe?.dodatkoweProdukty?.wybor === "nie" ? "NIE" : "—"}
+              </td></tr>
             </tbody></table>
 
             <h4 className="lwk-section-hd">Wycena</h4>

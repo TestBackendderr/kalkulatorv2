@@ -8,6 +8,7 @@ import MontazKwpUstawienia from "@/components/kalkulator/MontazKwpUstawienia";
 import MarzaKoncowaUstawienia from "@/components/kalkulator/MarzaKoncowaUstawienia";
 import DodatkoweProduktyUstawienia from "@/components/kalkulator/DodatkoweProduktyUstawienia";
 import OptymalizatorUstawienia from "@/components/kalkulator/OptymalizatorUstawienia";
+import LadowarkaSamochodowaUstawienia from "@/components/kalkulator/LadowarkaSamochodowaUstawienia";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ const TABS = [
   { key: "panele",         label: "Panele fotowoltaiczne" },
   { key: "magazyny",       label: "Magazyny energii" },
   { key: "klimatyzatory",  label: "Klimatyzatory" },
+  { key: "ladowarki-samochodowe", label: "Ładowarki samochodowe" },
   { key: "optymalizator",  label: "Optymalizator" },
   { key: "lead-sources",   label: "Koszty marketingowe" },
   { key: "dodatkowe-produkty", label: "Dodatkowe produkty" },
@@ -1505,6 +1507,7 @@ export default function UstawieniaKalkulatora() {
         {activeTab === "panele"            && <PaneleTab />}
         {activeTab === "magazyny"           && <MagazynyTab />}
         {activeTab === "klimatyzatory"      && <KlimatyzatoryTab />}
+        {activeTab === "ladowarki-samochodowe" && <LadowarkaSamochodowaUstawienia />}
         {activeTab === "optymalizator"      && <OptymalizatorUstawienia />}
         {activeTab === "lead-sources"       && <LeadSourcesTab />}
         {activeTab === "dodatkowe-produkty" && <DodatkoweProduktyUstawienia />}

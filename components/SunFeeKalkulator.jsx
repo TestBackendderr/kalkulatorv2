@@ -17,7 +17,6 @@ import {
 import { syncKalkulatorCatalogFromApi } from "@/utils/kalkulatorCatalogSync";
 import { computeMontazKwpQuote } from "@/utils/montazKwpSettings";
 import { computeMarzaKoncowa } from "@/utils/marzaKoncowaSettings";
-import { loadActiveDodatkoweProdukty } from "@/utils/dodatkoweProduktySettings";
 import { computeMagazynLine, formatTierBreakdown, normalizePriceTiers } from "@/utils/magazynPricing";
 import {
   computeFalownikLine,
@@ -185,6 +184,7 @@ export default function SunFeeKalkulator() {
   const [magazynyList,       setMagazynyList]       = useState([]);
   const [klimatyzatoryList,  setKlimatyzatoryList]  = useState([]);
   const [optymalizatoryList, setOptymalizatoryList] = useState([]);
+  const [ladowarkiSamochodoweList, setLadowarkiSamochodoweList] = useState([]);
   const [dodatkoweProduktyList, setDodatkoweProduktyList] = useState([]);
   const [leadSources,        setLeadSources]        = useState([]);
   const [typyMontazuList,    setTypyMontazuList]    = useState([]);
@@ -229,7 +229,14 @@ export default function SunFeeKalkulator() {
             : activeOptymalizatory[0].id,
         );
       }
-      setDodatkoweProduktyList(loadActiveDodatkoweProdukty());
+      const activeLadowarki = (catalog.ladowarkiSamochodowe || []).filter(
+        (l) => l.isActive !== false,
+      );
+      setLadowarkiSamochodoweList(activeLadowarki);
+      const activeDodatkowe = (catalog.dodatkoweProdukty || []).filter(
+        (p) => p.isActive !== false,
+      );
+      setDodatkoweProduktyList(activeDodatkowe);
       setLeadSources(activeSources);
       setTypyMontazuList(activeTypy);
       setKopanieRanges(
@@ -248,10 +255,6 @@ export default function SunFeeKalkulator() {
   }, []);
 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
-
-  useEffect(() => {
-    if (step === 4) setDodatkoweProduktyList(loadActiveDodatkoweProdukty());
-  }, [step]);
 
   // Step 0 – existing installation
   const [hasPv,                 setHasPv]                 = useState(""); // "tak" | "nie"
@@ -311,6 +314,9 @@ export default function SunFeeKalkulator() {
   const [klimatyzatorMontaz, setKlimatyzatorMontaz] = useState("");
   /** id klimatyzatora → ilość (tylko zaznaczone pozycje) */
   const [klimatyzatorQty, setKlimatyzatorQty] = useState({});
+  const [ladowarkaMontaz, setLadowarkaMontaz] = useState("");
+  /** id ładowarki → ilość (tylko zaznaczone pozycje) */
+  const [ladowarkaQty, setLadowarkaQty] = useState({});
   const [dodatkoweProduktyWybor, setDodatkoweProduktyWybor] = useState("");
   /** id produktu → ilość (tylko zaznaczone pozycje) */
   const [dodatkoweProduktyQty, setDodatkoweProduktyQty] = useState({});
@@ -635,6 +641,23 @@ export default function SunFeeKalkulator() {
     [klimatyzatoryWybrane],
   );
 
+  const ladowarkiWybrane = useMemo(() => {
+    if (ladowarkaMontaz !== "tak") return [];
+    return ladowarkiSamochodoweList
+      .map((l) => {
+        const qty = Math.max(0, parseInt(String(ladowarkaQty[l.id]), 10) || 0);
+        if (qty < 1) return null;
+        const unit = Number(l.priceNetto) || 0;
+        return { ...l, qty, lineTotal: unit * qty };
+      })
+      .filter(Boolean);
+  }, [ladowarkaMontaz, ladowarkaQty, ladowarkiSamochodoweList]);
+
+  const ladowarkiSuma = useMemo(
+    () => ladowarkiWybrane.reduce((s, l) => s + l.lineTotal, 0),
+    [ladowarkiWybrane],
+  );
+
   const dodatkoweProduktyWybrane = useMemo(() => {
     if (dodatkoweProduktyWybor !== "tak") return [];
     return dodatkoweProduktyList
@@ -813,6 +836,15 @@ export default function SunFeeKalkulator() {
       });
     }
 
+    if (ladowarkaMontaz === "tak") {
+      ladowarkiWybrane.forEach((l) => {
+        add(
+          `Ładowarka samochodowa – ${l.name} (${l.qty} szt. × ${fmt(l.priceNetto)} zł)`,
+          l.lineTotal,
+        );
+      });
+    }
+
     if (dodatkoweProduktyWybor === "tak") {
       dodatkoweProduktyWybrane.forEach((p) => {
         add(
@@ -873,6 +905,7 @@ export default function SunFeeKalkulator() {
     przekop, przekopMetry, przekopQuote,
     trasaKablowa, trasaKablowaQuote,
     klimatyzatorMontaz, klimatyzatoryWybrane,
+    ladowarkaMontaz, ladowarkiWybrane,
     dodatkoweProduktyWybor, dodatkoweProduktyWybrane,
     selectedLeadSourceId, leadSources,
   ]);
@@ -983,6 +1016,8 @@ export default function SunFeeKalkulator() {
       }
       if (klimatyzatorMontaz === "") return false;
       if (klimatyzatorMontaz === "tak" && klimatyzatoryWybrane.length === 0) return false;
+      if (ladowarkaMontaz === "") return false;
+      if (ladowarkaMontaz === "tak" && ladowarkiWybrane.length === 0) return false;
       if (dodatkoweProduktyWybor === "") return false;
       if (dodatkoweProduktyWybor === "tak" && dodatkoweProduktyWybrane.length === 0) return false;
       return true;
@@ -1068,7 +1103,7 @@ export default function SunFeeKalkulator() {
     } else if (step === 4) {
       if (rozdzielnica === "" || przekop === "" || trasaKablowa === "") {
         toast.warn(
-          "Odpowiedz na pytania o rozdzielnicę, przekop, trasę kablową, klimatyzator i dodatkowe produkty.",
+          "Odpowiedz na pytania o rozdzielnicę, przekop, trasę kablową, klimatyzator, ładowarkę i dodatkowe produkty.",
         );
       } else if (trasaKablowa === "tak" && (!trasaKablowaMetry || parseInt(trasaKablowaMetry, 10) < 1)) {
         toast.warn("Podaj długość dodatkowej trasy kablowej (min. 1 m).");
@@ -1082,6 +1117,10 @@ export default function SunFeeKalkulator() {
         toast.warn("Odpowiedz na pytanie o klimatyzator.");
       } else if (klimatyzatorMontaz === "tak" && klimatyzatoryWybrane.length === 0) {
         toast.warn("Wybierz co najmniej jedno urządzenie z listy klimatyzatorów.");
+      } else if (ladowarkaMontaz === "") {
+        toast.warn("Odpowiedz na pytanie o ładowarkę samochodową.");
+      } else if (ladowarkaMontaz === "tak" && ladowarkiWybrane.length === 0) {
+        toast.warn("Zaznacz co najmniej jedną ładowarkę z listy i podaj ilość (min. 1 szt.).");
       } else if (dodatkoweProduktyWybor === "") {
         toast.warn("Odpowiedz na pytanie o dodatkowe produkty.");
       } else if (dodatkoweProduktyWybor === "tak" && dodatkoweProduktyWybrane.length === 0) {
@@ -1233,6 +1272,23 @@ export default function SunFeeKalkulator() {
                 ? parseFloat(klimatyzatorySuma.toFixed(2))
                 : null,
           },
+          ladowarkaSamochodowa: {
+            montaz: ladowarkaMontaz,
+            urzadzenia:
+              ladowarkaMontaz === "tak"
+                ? ladowarkiWybrane.map((l) => ({
+                    id: l.id,
+                    nazwa: l.name,
+                    cenaNetto: l.priceNetto,
+                    ilosc: l.qty,
+                    kwotaNetto: parseFloat(l.lineTotal.toFixed(2)),
+                  }))
+                : [],
+            sumaNetto:
+              ladowarkaMontaz === "tak" && ladowarkiSuma > 0
+                ? parseFloat(ladowarkiSuma.toFixed(2))
+                : null,
+          },
           dodatkoweProdukty: {
             wybor: dodatkoweProduktyWybor,
             pozycje:
@@ -1333,6 +1389,7 @@ export default function SunFeeKalkulator() {
     setPrzekopPrzewodReczny("");
     setTrasaKablowa(""); setTrasaKablowaMetry(""); setTrasaKablowaReczny("");
     setKlimatyzatorMontaz(""); setKlimatyzatorQty({});
+    setLadowarkaMontaz(""); setLadowarkaQty({});
     setDodatkoweProduktyWybor(""); setDodatkoweProduktyQty({});
     setClientName(""); setClientSurname(""); setRabat(""); setVatRate(23);
   };
@@ -1367,6 +1424,36 @@ export default function SunFeeKalkulator() {
     });
   };
 
+  const isLadowarkaSelected = (id) => {
+    const q = ladowarkaQty[id];
+    return q !== undefined && q !== "" && Math.max(0, parseInt(String(q), 10) || 0) >= 1;
+  };
+
+  const toggleLadowarka = (id) => {
+    setLadowarkaQty((prev) => {
+      const next = { ...prev };
+      if (isLadowarkaSelected(id)) {
+        delete next[id];
+      } else {
+        next[id] = "1";
+      }
+      return next;
+    });
+  };
+
+  const setLadowarkaQtyField = (id, raw) => {
+    const cleaned = raw.replace(/[^\d]/g, "");
+    setLadowarkaQty((prev) => {
+      const next = { ...prev };
+      if (!cleaned) {
+        delete next[id];
+        return next;
+      }
+      next[id] = cleaned;
+      return next;
+    });
+  };
+
   const isDodatkowyProduktSelected = (id) => {
     const q = dodatkoweProduktyQty[id];
     return q !== undefined && q !== "" && Math.max(0, parseInt(String(q), 10) || 0) >= 1;
@@ -1384,7 +1471,7 @@ export default function SunFeeKalkulator() {
     });
   };
 
-  const setDodatkowyProduktQty = (id, raw) => {
+  const setDodatkowyProduktQtyField = (id, raw) => {
     const cleaned = raw.replace(/[^\d]/g, "");
     setDodatkoweProduktyQty((prev) => {
       const next = { ...prev };
@@ -1608,6 +1695,7 @@ export default function SunFeeKalkulator() {
       const tq = trasaKablowaQuote;
       const trasaTak = trasaKablowa === "tak";
       const klimaTak = klimatyzatorMontaz === "tak";
+      const ladowarkaTak = ladowarkaMontaz === "tak";
       const dpTak = dodatkoweProduktyWybor === "tak";
 
       blocks.push(
@@ -1679,6 +1767,30 @@ export default function SunFeeKalkulator() {
               )}
             </div>
             <div>
+              Ładowarka samochodowa:{" "}
+              {ladowarkaTak ? "TAK" : ladowarkaMontaz === "nie" ? "NIE" : "—"}
+              {ladowarkaTak && ladowarkiWybrane.length > 0 && (
+                <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                  {ladowarkiWybrane.map((l) => (
+                    <li key={l.id}>
+                      {l.name} — {l.qty} szt.
+                      {showAllPrices && (
+                        <>
+                          {" "}
+                          × {fmt(l.priceNetto)} zł = {fmt(l.lineTotal)} zł netto
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {showAllPrices && ladowarkaTak && ladowarkiSuma > 0 && (
+                <span style={{ display: "block", marginTop: 4 }}>
+                  Razem ładowarki: {fmt(ladowarkiSuma)} zł netto
+                </span>
+              )}
+            </div>
+            <div>
               Dodatkowe produkty:{" "}
               {dpTak ? "TAK" : dodatkoweProduktyWybor === "nie" ? "NIE" : "—"}
               {dpTak && dodatkoweProduktyWybrane.length > 0 && (
@@ -1686,17 +1798,17 @@ export default function SunFeeKalkulator() {
                   {dodatkoweProduktyWybrane.map((p) => (
                     <li key={p.id}>
                       {p.name} — {p.qty} szt.
-                      {isAdmin && (
+                      {showAllPrices && (
                         <>
                           {" "}
-                          ({fmt(p.priceNetto)} zł/szt. = {fmt(p.lineTotal)} zł)
+                          × {fmt(p.priceNetto)} zł = {fmt(p.lineTotal)} zł netto
                         </>
                       )}
                     </li>
                   ))}
                 </ul>
               )}
-              {isAdmin && dpTak && dodatkoweProduktySuma > 0 && (
+              {showAllPrices && dpTak && dodatkoweProduktySuma > 0 && (
                 <span style={{ display: "block", marginTop: 4 }}>
                   Razem dodatkowe produkty: {fmt(dodatkoweProduktySuma)} zł netto
                 </span>
@@ -3034,7 +3146,143 @@ export default function SunFeeKalkulator() {
 
             <div className="kalk-divider" />
 
-            <label className="kalk-label">Czy chesz zamontować ładowarkę samochodową ?</label>
+            <label className="kalk-label">Czy chcesz zamontować ładowarkę samochodową?</label>
+            <div className="kalk-radio-group">
+              <label className={`kalk-radio-card${ladowarkaMontaz === "nie" ? " selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="ladowarkaMontaz"
+                  value="nie"
+                  checked={ladowarkaMontaz === "nie"}
+                  onChange={() => {
+                    setLadowarkaMontaz("nie");
+                    setLadowarkaQty({});
+                  }}
+                />
+                NIE
+              </label>
+              <label
+                className={`kalk-radio-card kalk-radio-card--warn${
+                  ladowarkaMontaz === "tak" ? " selected" : ""
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="ladowarkaMontaz"
+                  value="tak"
+                  checked={ladowarkaMontaz === "tak"}
+                  onChange={() => setLadowarkaMontaz("tak")}
+                />
+                TAK
+              </label>
+            </div>
+
+            {ladowarkaMontaz === "tak" && (
+              <>
+                <p className="kalk-section-desc" style={{ marginTop: 10 }}>
+                  Zaznacz ładowarki z listy i podaj ilość (szt.)
+                </p>
+                {ladowarkiSamochodoweList.length === 0 ? (
+                  <div className="kalk-info-box kalk-info-box--warn">
+                    Brak aktywnych ładowarek. Dodaj je w Ustawieniach kalkulatora → Ładowarki
+                    samochodowe.
+                  </div>
+                ) : (
+                  <div className="kalk-dp-panel">
+                    <div className="kalk-dp-grid">
+                    {ladowarkiSamochodoweList.map((l) => {
+                      const selected = isLadowarkaSelected(l.id);
+                      const qtyVal = ladowarkaQty[l.id] ?? "";
+                      const qtyNum = Math.max(1, parseInt(String(qtyVal), 10) || 1);
+                      const lineTotal =
+                        selected && qtyVal
+                          ? (Number(l.priceNetto) || 0) * qtyNum
+                          : 0;
+                      return (
+                        <div
+                          key={l.id}
+                          className={`kalk-dp-card${selected ? " selected" : ""}`}
+                        >
+                          <label className="kalk-dp-card-top">
+                            <input
+                              type="checkbox"
+                              className="kalk-dp-card-input"
+                              checked={selected}
+                              onChange={() => toggleLadowarka(l.id)}
+                            />
+                            <span className="kalk-dp-card-mark" aria-hidden="true" />
+                            <span className="kalk-dp-card-info">
+                              <span className="kalk-dp-card-name">{l.name}</span>
+                              {showAllPrices && (
+                                <span className="kalk-dp-card-price">
+                                  {fmt(l.priceNetto)} zł / szt.
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                          {selected && (
+                            <div
+                              className="kalk-dp-card-footer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span className="kalk-dp-card-footer-label">Ilość</span>
+                              <div className="kalk-dp-stepper">
+                                <button
+                                  type="button"
+                                  className="kalk-dp-stepper-btn"
+                                  aria-label="Zmniejsz ilość"
+                                  disabled={qtyNum <= 1}
+                                  onClick={() =>
+                                    setLadowarkaQtyField(l.id, String(Math.max(1, qtyNum - 1)))
+                                  }
+                                >
+                                  −
+                                </button>
+                                <input
+                                  id={`ladowarka-qty-${l.id}`}
+                                  type="number"
+                                  min="1"
+                                  max="999"
+                                  className="kalk-dp-stepper-input"
+                                  value={qtyVal}
+                                  onChange={(e) => setLadowarkaQtyField(l.id, e.target.value)}
+                                />
+                                <button
+                                  type="button"
+                                  className="kalk-dp-stepper-btn"
+                                  aria-label="Zwiększ ilość"
+                                  disabled={qtyNum >= 999}
+                                  onClick={() =>
+                                    setLadowarkaQtyField(l.id, String(Math.min(999, qtyNum + 1)))
+                                  }
+                                >
+                                  +
+                                </button>
+                              </div>
+                              {showAllPrices && lineTotal > 0 && (
+                                <span className="kalk-dp-card-total">
+                                  {fmt(lineTotal)} zł netto
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    </div>
+                    {showAllPrices && ladowarkiSuma > 0 && (
+                      <div className="kalk-dp-sum">
+                        <strong>Razem ładowarki:</strong> {fmt(ladowarkiSuma)} zł netto
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="kalk-divider" />
+
+            <label className="kalk-label">Czy chcesz dodać dodatkowe produkty?</label>
             <div className="kalk-radio-group">
               <label className={`kalk-radio-card${dodatkoweProduktyWybor === "nie" ? " selected" : ""}`}>
                 <input
@@ -3072,95 +3320,104 @@ export default function SunFeeKalkulator() {
                 </p>
                 {dodatkoweProduktyList.length === 0 ? (
                   <div className="kalk-info-box kalk-info-box--warn">
-                    Brak aktywnych dodatkowych produktów. Dodaj je w Ustawieniach kalkulatora →
-                    Dodatkowe produkty.
+                    Brak aktywnych produktów. Dodaj je w Ustawieniach kalkulatora → Dodatkowe
+                    produkty.
                   </div>
                 ) : (
                   <div className="kalk-dp-panel">
                     <div className="kalk-dp-grid">
-                    {dodatkoweProduktyList.map((p) => {
-                      const selected = isDodatkowyProduktSelected(p.id);
-                      const qtyVal = dodatkoweProduktyQty[p.id] ?? "";
-                      const qtyNum = Math.max(1, parseInt(String(qtyVal), 10) || 1);
-                      const lineTotal =
-                        selected && qtyVal
-                          ? (Number(p.priceNetto) || 0) * qtyNum
-                          : 0;
-                      return (
-                        <div
-                          key={p.id}
-                          className={`kalk-dp-card${selected ? " selected" : ""}`}
-                        >
-                          <label className="kalk-dp-card-top">
-                            <input
-                              type="checkbox"
-                              className="kalk-dp-card-input"
-                              checked={selected}
-                              onChange={() => toggleDodatkowyProdukt(p.id)}
-                            />
-                            <span className="kalk-dp-card-mark" aria-hidden="true" />
-                            <span className="kalk-dp-card-info">
-                              <span className="kalk-dp-card-name">{p.name}</span>
-                              {showAllPrices && (
-                                <span className="kalk-dp-card-price">
-                                  {fmt(p.priceNetto)} zł / szt.
-                                </span>
-                              )}
-                            </span>
-                          </label>
-                          {selected && (
-                            <div
-                              className="kalk-dp-card-footer"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <span className="kalk-dp-card-footer-label">Ilość</span>
-                              <div className="kalk-dp-stepper">
-                                <button
-                                  type="button"
-                                  className="kalk-dp-stepper-btn"
-                                  aria-label="Zmniejsz ilość"
-                                  disabled={qtyNum <= 1}
-                                  onClick={() =>
-                                    setDodatkowyProduktQty(p.id, String(Math.max(1, qtyNum - 1)))
-                                  }
-                                >
-                                  −
-                                </button>
-                                <input
-                                  id={`dp-qty-${p.id}`}
-                                  type="number"
-                                  min="1"
-                                  max="999"
-                                  className="kalk-dp-stepper-input"
-                                  value={qtyVal}
-                                  onChange={(e) => setDodatkowyProduktQty(p.id, e.target.value)}
-                                />
-                                <button
-                                  type="button"
-                                  className="kalk-dp-stepper-btn"
-                                  aria-label="Zwiększ ilość"
-                                  disabled={qtyNum >= 999}
-                                  onClick={() =>
-                                    setDodatkowyProduktQty(p.id, String(Math.min(999, qtyNum + 1)))
-                                  }
-                                >
-                                  +
-                                </button>
+                      {dodatkoweProduktyList.map((p) => {
+                        const selected = isDodatkowyProduktSelected(p.id);
+                        const qtyVal = dodatkoweProduktyQty[p.id] ?? "";
+                        const qtyNum = Math.max(1, parseInt(String(qtyVal), 10) || 1);
+                        const lineTotal =
+                          selected && qtyVal
+                            ? (Number(p.priceNetto) || 0) * qtyNum
+                            : 0;
+                        return (
+                          <div
+                            key={p.id}
+                            className={`kalk-dp-card${selected ? " selected" : ""}`}
+                          >
+                            <label className="kalk-dp-card-top">
+                              <input
+                                type="checkbox"
+                                className="kalk-dp-card-input"
+                                checked={selected}
+                                onChange={() => toggleDodatkowyProdukt(p.id)}
+                              />
+                              <span className="kalk-dp-card-mark" aria-hidden="true" />
+                              <span className="kalk-dp-card-info">
+                                <span className="kalk-dp-card-name">{p.name}</span>
+                                {showAllPrices && (
+                                  <span className="kalk-dp-card-price">
+                                    {fmt(p.priceNetto)} zł / szt.
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                            {selected && (
+                              <div
+                                className="kalk-dp-card-footer"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="kalk-dp-card-footer-label">Ilość</span>
+                                <div className="kalk-dp-stepper">
+                                  <button
+                                    type="button"
+                                    className="kalk-dp-stepper-btn"
+                                    aria-label="Zmniejsz ilość"
+                                    disabled={qtyNum <= 1}
+                                    onClick={() =>
+                                      setDodatkowyProduktQtyField(
+                                        p.id,
+                                        String(Math.max(1, qtyNum - 1)),
+                                      )
+                                    }
+                                  >
+                                    −
+                                  </button>
+                                  <input
+                                    id={`dp-qty-${p.id}`}
+                                    type="number"
+                                    min="1"
+                                    max="999"
+                                    className="kalk-dp-stepper-input"
+                                    value={qtyVal}
+                                    onChange={(e) =>
+                                      setDodatkowyProduktQtyField(p.id, e.target.value)
+                                    }
+                                  />
+                                  <button
+                                    type="button"
+                                    className="kalk-dp-stepper-btn"
+                                    aria-label="Zwiększ ilość"
+                                    disabled={qtyNum >= 999}
+                                    onClick={() =>
+                                      setDodatkowyProduktQtyField(
+                                        p.id,
+                                        String(Math.min(999, qtyNum + 1)),
+                                      )
+                                    }
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                                {showAllPrices && lineTotal > 0 && (
+                                  <span className="kalk-dp-card-total">
+                                    {fmt(lineTotal)} zł netto
+                                  </span>
+                                )}
                               </div>
-                              {showAllPrices && lineTotal > 0 && (
-                                <span className="kalk-dp-card-total">
-                                  {fmt(lineTotal)} zł netto
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                     {showAllPrices && dodatkoweProduktySuma > 0 && (
                       <div className="kalk-dp-sum">
-                        <strong>Razem dodatkowe produkty:</strong> {fmt(dodatkoweProduktySuma)} zł netto
+                        <strong>Razem dodatkowe produkty:</strong>{" "}
+                        {fmt(dodatkoweProduktySuma)} zł netto
                       </div>
                     )}
                   </div>
