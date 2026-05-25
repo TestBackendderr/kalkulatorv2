@@ -45,40 +45,81 @@ $u-radius-sm: 5px;
   color: $u-gray;
 }
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────────
+// ─── Sidebar layout ───────────────────────────────────────────────────────────
 
-.usk-tabs {
+.usk-layout {
   display: flex;
-  gap: 2px;
-  border-bottom: 2px solid $u-border;
-  margin-bottom: 24px;
+  align-items: flex-start;
+  gap: 24px;
 }
 
-.usk-tab {
-  padding: 9px 18px;
+.usk-sidebar {
+  flex: 0 0 240px;
+  width: 240px;
+  background: $u-white;
+  border: 1px solid $u-border;
+  border-radius: $u-radius;
+  box-shadow: $u-shadow;
+  padding: 12px 0;
+  position: sticky;
+  top: 16px;
+}
+
+.usk-nav-section {
+  & + & {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #eef0f3;
+  }
+}
+
+.usk-nav-section-title {
+  padding: 8px 16px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $u-gray-lt;
+}
+
+.usk-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.usk-nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 16px;
   border: none;
+  border-left: 3px solid transparent;
   background: none;
   font-size: 13px;
   font-weight: 500;
-  color: $u-gray;
+  color: $u-mid;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  transition: color .15s, border-color .15s;
-  white-space: nowrap;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 
-  &:hover { color: $u-dark; }
+  &:hover {
+    color: $u-dark;
+    background: $u-bg;
+  }
 
   &--active {
     color: $u-primary;
-    border-bottom-color: $u-primary;
-    font-weight: 700;
+    font-weight: 600;
+    border-left-color: $u-primary;
+    background: #eff6ff;
   }
 }
 
 // ─── Tab content card ─────────────────────────────────────────────────────────
 
 .usk-tab-content {
+  flex: 1;
+  min-width: 0;
   background: $u-white;
   border: 1px solid $u-border;
   border-radius: $u-radius;
@@ -88,6 +129,18 @@ $u-radius-sm: 5px;
   &--wide {
     padding: 20px;
     overflow-x: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .usk-layout {
+    flex-direction: column;
+  }
+
+  .usk-sidebar {
+    position: static;
+    width: 100%;
+    flex: none;
   }
 }
 

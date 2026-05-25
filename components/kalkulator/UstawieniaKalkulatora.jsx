@@ -12,21 +12,43 @@ import LadowarkaSamochodowaUstawienia from "@/components/kalkulator/LadowarkaSam
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TABS = [
-  { key: "falowniki",      label: "Falowniki" },
-  { key: "panele",         label: "Panele fotowoltaiczne" },
-  { key: "magazyny",       label: "Magazyny energii" },
-  { key: "klimatyzatory",  label: "Klimatyzatory" },
-  { key: "ladowarki-samochodowe", label: "Ładowarki samochodowe" },
-  { key: "optymalizator",  label: "Optymalizator" },
-  { key: "lead-sources",   label: "Koszty marketingowe" },
-  { key: "dodatkowe-produkty", label: "Dodatkowe produkty" },
-  { key: "typy-montazu",       label: "Typy montażu" },
-  { key: "przewody",   label: "Przewody" },
-  { key: "przekopy",   label: "Przekopy" },
-  { key: "montaz-kwp", label: "Montaż PV (kWp)" },
-  { key: "marza-koncowa", label: "Marża końcowa" },
+const NAV_SECTIONS = [
+  {
+    title: "Katalogi PV",
+    items: [
+      { key: "falowniki", label: "Falowniki" },
+      { key: "panele", label: "Panele fotowoltaiczne" },
+      { key: "magazyny", label: "Magazyny energii" },
+      { key: "optymalizator", label: "Optymalizatory" },
+    ],
+  },
+  {
+    title: "Dodatki",
+    items: [
+      { key: "klimatyzatory", label: "Klimatyzatory" },
+      { key: "ladowarki-samochodowe", label: "Ładowarki samochodowe" },
+      { key: "dodatkowe-produkty", label: "Dodatkowe produkty" },
+    ],
+  },
+  {
+    title: "Montaż i okablowanie",
+    items: [
+      { key: "typy-montazu", label: "Typy montażu" },
+      { key: "przewody", label: "Przewody" },
+      { key: "przekopy", label: "Przekopy" },
+      { key: "montaz-kwp", label: "Montaż PV (kWp)" },
+    ],
+  },
+  {
+    title: "Wycena",
+    items: [
+      { key: "lead-sources", label: "Koszty marketingowe" },
+      { key: "marza-koncowa", label: "Marża końcowa" },
+    ],
+  },
 ];
+
+const WIDE_CONTENT_KEYS = new Set(["przewody", "przekopy", "montaz-kwp"]);
 
 const FALOWNIK_TYP_OPTIONS = [
   { value: "Niskopradowy", label: "Niskonapięciowy" },
@@ -1478,6 +1500,39 @@ function LeadSourcesTab() {
   );
 }
 
+function UstawieniaActivePanel({ activeTab }) {
+  switch (activeTab) {
+    case "falowniki":
+      return <FalownikiTab />;
+    case "panele":
+      return <PaneleTab />;
+    case "magazyny":
+      return <MagazynyTab />;
+    case "klimatyzatory":
+      return <KlimatyzatoryTab />;
+    case "ladowarki-samochodowe":
+      return <LadowarkaSamochodowaUstawienia />;
+    case "optymalizator":
+      return <OptymalizatorUstawienia />;
+    case "lead-sources":
+      return <LeadSourcesTab />;
+    case "dodatkowe-produkty":
+      return <DodatkoweProduktyUstawienia />;
+    case "typy-montazu":
+      return <TypMontazuTab />;
+    case "przewody":
+      return <PrzewodyTab />;
+    case "przekopy":
+      return <PrzekopyPanel />;
+    case "montaz-kwp":
+      return <MontazKwpUstawienia />;
+    case "marza-koncowa":
+      return <MarzaKoncowaUstawienia />;
+    default:
+      return null;
+  }
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function UstawieniaKalkulatora() {
@@ -1487,35 +1542,39 @@ export default function UstawieniaKalkulatora() {
     <div className="usk-wrapper">
       <div className="usk-page-header">
         <h1 className="usk-page-title">Ustawienia kalkulatora</h1>
-        <p className="usk-page-subtitle">Zarządzanie katalogami produktów używanych w kalkulatorze Sun Fee</p>
+        <p className="usk-page-subtitle">
+          Zarządzanie katalogami produktów używanych w kalkulatorze Sun Fee
+        </p>
       </div>
 
-      <div className="usk-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`usk-tab${activeTab === t.key ? " usk-tab--active" : ""}`}
-            onClick={() => setActiveTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <div className="usk-layout">
+        <nav className="usk-sidebar" aria-label="Katalogi kalkulatora">
+          {NAV_SECTIONS.map((section) => (
+            <div key={section.title} className="usk-nav-section">
+              <div className="usk-nav-section-title">{section.title}</div>
+              <ul className="usk-nav-list">
+                {section.items.map((item) => (
+                  <li key={item.key}>
+                    <button
+                      type="button"
+                      className={`usk-nav-item${activeTab === item.key ? " usk-nav-item--active" : ""}`}
+                      onClick={() => setActiveTab(item.key)}
+                      aria-current={activeTab === item.key ? "page" : undefined}
+                    >
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
 
-      <div className={`usk-tab-content${activeTab === "przewody" || activeTab === "przekopy" || activeTab === "montaz-kwp" ? " usk-tab-content--wide" : ""}`}>
-        {activeTab === "falowniki"         && <FalownikiTab />}
-        {activeTab === "panele"            && <PaneleTab />}
-        {activeTab === "magazyny"           && <MagazynyTab />}
-        {activeTab === "klimatyzatory"      && <KlimatyzatoryTab />}
-        {activeTab === "ladowarki-samochodowe" && <LadowarkaSamochodowaUstawienia />}
-        {activeTab === "optymalizator"      && <OptymalizatorUstawienia />}
-        {activeTab === "lead-sources"       && <LeadSourcesTab />}
-        {activeTab === "dodatkowe-produkty" && <DodatkoweProduktyUstawienia />}
-        {activeTab === "typy-montazu"       && <TypMontazuTab />}
-        {activeTab === "przewody"           && <PrzewodyTab />}
-        {activeTab === "przekopy"           && <PrzekopyPanel />}
-        {activeTab === "montaz-kwp"         && <MontazKwpUstawienia />}
-        {activeTab === "marza-koncowa"      && <MarzaKoncowaUstawienia />}
+        <div
+          className={`usk-tab-content${WIDE_CONTENT_KEYS.has(activeTab) ? " usk-tab-content--wide" : ""}`}
+        >
+          <UstawieniaActivePanel activeTab={activeTab} />
+        </div>
       </div>
     </div>
   );
