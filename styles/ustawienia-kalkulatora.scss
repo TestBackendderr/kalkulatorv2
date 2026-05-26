@@ -150,13 +150,23 @@ $u-radius-sm: 5px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 18px;
+
+  .usk-btn {
+    flex-shrink: 0;
+    justify-content: center;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
 }
 
 .usk-tab-title {
   font-size: 15px;
   font-weight: 700;
   color: $u-dark;
+  margin: 0;
+  line-height: 1.25;
 }
 
 // ─── Buttons ──────────────────────────────────────────────────────────────────
@@ -164,11 +174,13 @@ $u-radius-sm: 5px;
 .usk-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   padding: 8px 16px;
   border-radius: $u-radius-sm;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.25;
   cursor: pointer;
   border: none;
   transition: background .15s, opacity .15s;
@@ -791,6 +803,167 @@ $u-radius-sm: 5px;
 
 .usk-marza-input {
   max-width: 120px;
+}
+
+// ─── Karta katalogowa PDF ─────────────────────────────────────────────────────
+
+.usk-karta-field {
+  margin-top: 4px;
+}
+
+.usk-karta-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.usk-karta-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 140px;
+  padding: 8px 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: $u-radius-sm;
+  background: #f3f4f6;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+
+  &:hover:not(:disabled) {
+    background: #e5e7eb;
+    border-color: #d1d5db;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.usk-karta-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.usk-karta-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.usk-karta-selected-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: $u-primary;
+  font-weight: 500;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover { text-decoration: underline; }
+}
+
+span.usk-karta-selected-name {
+  color: $u-mid;
+  text-decoration: none;
+}
+
+.usk-karta-clear {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: $u-gray-lt;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover {
+    color: $u-danger;
+    background: #fef2f2;
+  }
+}
+
+.usk-karta-input-hidden {
+  display: none;
+}
+
+.usk-td-karta {
+  text-align: center;
+  color: $u-gray-lt;
+  white-space: nowrap;
+}
+
+.usk-karta-table-link {
+  color: $u-primary;
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
+
+.usk-sprzet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.usk-sprzet-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #eef0f3;
+
+  &:last-child { border-bottom: none; }
+}
+
+.usk-sprzet-item-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.usk-sprzet-typ {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: $u-gray-lt;
+}
+
+.usk-sprzet-nazwa {
+  font-weight: 600;
+  color: $u-dark;
+}
+
+.usk-sprzet-szczegoly {
+  font-size: 12px;
+  color: $u-gray;
+}
+
+.usk-sprzet-brak-karty {
+  font-size: 12px;
+  color: $u-gray-lt;
+  font-style: italic;
 }
 
 .usk-marza-form .usk-hint {

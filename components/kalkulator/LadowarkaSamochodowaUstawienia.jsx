@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
 import { formatApiErrorMessage } from "@/utils/apiError";
+import KartaKatalogowaField from "@/components/kalkulator/KartaKatalogowaField";
+import KartaKatalogowaTableCell from "@/components/kalkulator/KartaKatalogowaTableCell";
+import { applyKartaKatalogowaAfterSave } from "@/utils/kartaKatalogowaSave";
 
 const EMPTY_FORM = { name: "", priceNetto: "", isActive: true };
 
@@ -44,6 +47,9 @@ export default function LadowarkaSamochodowaUstawienia() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const [kartaUrl, setKartaUrl] = useState(null);
+  const [pendingPdf, setPendingPdf] = useState(null);
+  const [removeKarta, setRemoveKarta] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,8 +67,15 @@ export default function LadowarkaSamochodowaUstawienia() {
     load();
   }, [load]);
 
+  const resetKarta = () => {
+    setKartaUrl(null);
+    setPendingPdf(null);
+    setRemoveKarta(false);
+  };
+
   const openAdd = () => {
     setForm(EMPTY_FORM);
+    resetKarta();
     setModal({ mode: "add" });
   };
 
@@ -72,10 +85,16 @@ export default function LadowarkaSamochodowaUstawienia() {
       priceNetto: item.priceNetto ?? "",
       isActive: item.isActive,
     });
+    setKartaUrl(item.kartaKatalogowaUrl ?? null);
+    setPendingPdf(null);
+    setRemoveKarta(false);
     setModal({ mode: "edit", id: item.id });
   };
 
-  const closeModal = () => setModal(null);
+  const closeModal = () => {
+    setModal(null);
+    resetKarta();
+  };
 
   const validate = () => {
     if (!form.name.trim()) {
@@ -99,12 +118,23 @@ export default function LadowarkaSamochodowaUstawienia() {
         priceNetto: parseFloat(String(form.priceNetto).replace(",", ".")),
         isActive: form.isActive,
       };
+      let entityId = modal.id;
       if (modal.mode === "add") {
-        await api.post("/ladowarki-samochodowe", payload);
+        const res = await api.post("/ladowarki-samochodowe", payload);
+        entityId = res.data?.id;
         toast.success("Ładowarka samochodowa dodana");
       } else {
         await api.patch(`/ladowarki-samochodowe/${modal.id}`, payload);
         toast.success("Ładowarka samochodowa zaktualizowana");
+      }
+      if (entityId) {
+        await applyKartaKatalogowaAfterSave({
+          entityType: "ladowarka",
+          entityId,
+          pendingFile: pendingPdf,
+          previousUrl: kartaUrl,
+          cleared: removeKarta,
+        });
       }
       closeModal();
       load();
@@ -159,6 +189,7 @@ export default function LadowarkaSamochodowaUstawienia() {
               <tr>
                 <th>Nazwa</th>
                 <th>Cena netto (zł)</th>
+                <th>Karta PDF</th>
                 <th>Status</th>
                 <th>Akcje</th>
               </tr>
@@ -166,7 +197,7 @@ export default function LadowarkaSamochodowaUstawienia() {
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="usk-empty">
+                  <td colSpan={5} className="usk-empty">
                     Brak danych
                   </td>
                 </tr>
@@ -175,6 +206,7 @@ export default function LadowarkaSamochodowaUstawienia() {
                 <tr key={item.id} className={item.isActive ? "" : "usk-row--inactive"}>
                   <td className={item.isActive ? "" : "usk-strikethrough"}>{item.name}</td>
                   <td>{fmt(item.priceNetto)} zł</td>
+                  <KartaKatalogowaTableCell url={item.kartaKatalogowaUrl} />
                   <td>
                     <StatusBadge isActive={item.isActive} />
                   </td>
@@ -238,6 +270,18 @@ export default function LadowarkaSamochodowaUstawienia() {
                 onChange={(e) => setForm({ ...form, priceNetto: e.target.value })}
                 placeholder="np. 4500"
               />
+              <KartaKatalogowaField
+                url={removeKarta ? null : kartaUrl}
+                onUrlChange={setKartaUrl}
+                pendingFile={pendingPdf}
+                onPendingFileChange={(f) => {
+                  setPendingPdf(f);
+                  if (f) setRemoveKarta(false);
+                }}
+                onRemove={() => setRemoveKarta(true)}
+                disabled={saving}
+              />
+
               <label className="usk-checkbox-label">
                 <input
                   type="checkbox"

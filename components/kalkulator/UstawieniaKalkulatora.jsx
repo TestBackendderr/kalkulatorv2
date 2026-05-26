@@ -9,6 +9,9 @@ import MarzaKoncowaUstawienia from "@/components/kalkulator/MarzaKoncowaUstawien
 import DodatkoweProduktyUstawienia from "@/components/kalkulator/DodatkoweProduktyUstawienia";
 import OptymalizatorUstawienia from "@/components/kalkulator/OptymalizatorUstawienia";
 import LadowarkaSamochodowaUstawienia from "@/components/kalkulator/LadowarkaSamochodowaUstawienia";
+import KartaKatalogowaField from "@/components/kalkulator/KartaKatalogowaField";
+import KartaKatalogowaTableCell from "@/components/kalkulator/KartaKatalogowaTableCell";
+import { applyKartaKatalogowaAfterSave } from "@/utils/kartaKatalogowaSave";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -98,6 +101,49 @@ function StatusBadge({ isActive }) {
       {isActive ? "Aktywny" : "Nieaktywny"}
     </span>
   );
+}
+
+function useKartaKatalogowaInModal() {
+  const [kartaUrl, setKartaUrl] = useState(null);
+  const [pendingPdf, setPendingPdf] = useState(null);
+  const [removeKarta, setRemoveKarta] = useState(false);
+
+  const resetKarta = () => {
+    setKartaUrl(null);
+    setPendingPdf(null);
+    setRemoveKarta(false);
+  };
+
+  const loadKartaFromItem = (item) => {
+    setKartaUrl(item?.kartaKatalogowaUrl ?? null);
+    setPendingPdf(null);
+    setRemoveKarta(false);
+  };
+
+  const kartaFieldProps = (entityType, entityId, saving) => ({
+    entityType,
+    entityId: entityId ?? null,
+    url: removeKarta ? null : kartaUrl,
+    onUrlChange: setKartaUrl,
+    pendingFile: pendingPdf,
+    onPendingFileChange: (f) => {
+      setPendingPdf(f);
+      if (f) setRemoveKarta(false);
+    },
+    onRemove: () => setRemoveKarta(true),
+    disabled: saving,
+  });
+
+  const applyKartaAfterSave = (entityType, entityId) =>
+    applyKartaKatalogowaAfterSave({
+      entityType,
+      entityId,
+      pendingFile: pendingPdf,
+      previousUrl: kartaUrl,
+      cleared: removeKarta,
+    });
+
+  return { resetKarta, loadKartaFromItem, kartaFieldProps, applyKartaAfterSave };
 }
 
 // ─── Confirm modal ────────────────────────────────────────────────────────────
@@ -246,6 +292,7 @@ function FalownikiTab() {
   const [form,    setForm]    = useState(EMPTY_FALOWNIK);
   const [saving,  setSaving]  = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const karta = useKartaKatalogowaInModal();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -261,7 +308,7 @@ function FalownikiTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openAdd = () => { setForm(EMPTY_FALOWNIK); setModal({ mode: "add" }); };
+  const openAdd = () => { setForm(EMPTY_FALOWNIK); karta.resetKarta(); setModal({ mode: "add" }); };
   const openEdit = (item) => {
     setForm({
       name:          item.name,
@@ -272,9 +319,10 @@ function FalownikiTab() {
       cennikProgowy: parseCennikProgowy(item),
       isActive:      item.isActive,
     });
+    karta.loadKartaFromItem(item);
     setModal({ mode: "edit", id: item.id });
   };
-  const closeModal = () => setModal(null);
+  const closeModal = () => { setModal(null); karta.resetKarta(); };
 
   const validate = () => {
     if (!form.name.trim())                   { toast.warn("Nazwa jest wymagana"); return false; }
@@ -306,13 +354,16 @@ function FalownikiTab() {
         ...(cennikProgowy && { cennikProgowy }),
       };
 
+      let entityId = modal.id;
       if (modal.mode === "add") {
-        await api.post("/kalkulator/falowniki", payload);
+        const res = await api.post("/kalkulator/falowniki", payload);
+        entityId = res.data?.id;
         toast.success("Falownik dodany");
       } else {
         await api.patch(`/kalkulator/falowniki/${modal.id}`, payload);
         toast.success("Falownik zaktualizowany");
       }
+      if (entityId) await karta.applyKartaAfterSave("falownik", entityId);
       closeModal();
       load();
     } catch (e) {
@@ -352,13 +403,14 @@ function FalownikiTab() {
                 <th>Typ</th>
                 <th>Moc (kW)</th>
                 <th>Cennik progowy (zł netto)</th>
+                <th>Karta PDF</th>
                 <th>Status</th>
                 <th>Akcje</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={7} className="usk-empty">Brak danych</td></tr>
+                <tr><td colSpan={8} className="usk-empty">Brak danych</td></tr>
               )}
               {items.map((item) => {
                 const tiers = parseCennikProgowy(item);
@@ -378,6 +430,7 @@ function FalownikiTab() {
                         : `${fmt(tiers[0]?.priceNetto ?? item.priceNetto)} zł`}
                       {tiers.length > 4 && " …"}
                     </td>
+                    <KartaKatalogowaTableCell url={item.kartaKatalogowaUrl} />
                     <td><StatusBadge isActive={item.isActive} /></td>
                     <td className="usk-actions">
                       <button className="usk-btn usk-btn--sm" onClick={() => openEdit(item)}>Edytuj</button>
@@ -446,6 +499,10 @@ function FalownikiTab() {
                 onChange={(t) => setForm({ ...form, cennikProgowy: t })}
               />
 
+              <KartaKatalogowaField
+                {...karta.kartaFieldProps("falownik", modal.mode === "edit" ? modal.id : null, saving)}
+              />
+
               <label className="usk-checkbox-label">
                 <input
                   type="checkbox"
@@ -485,6 +542,7 @@ function KlimatyzatoryTab() {
   const [form, setForm] = useState(EMPTY_KLIMATYZATOR);
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const karta = useKartaKatalogowaInModal();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -500,12 +558,13 @@ function KlimatyzatoryTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openAdd = () => { setForm(EMPTY_KLIMATYZATOR); setModal({ mode: "add" }); };
+  const openAdd = () => { setForm(EMPTY_KLIMATYZATOR); karta.resetKarta(); setModal({ mode: "add" }); };
   const openEdit = (item) => {
     setForm({ name: item.name, priceNetto: item.priceNetto, isActive: item.isActive });
+    karta.loadKartaFromItem(item);
     setModal({ mode: "edit", id: item.id });
   };
-  const closeModal = () => setModal(null);
+  const closeModal = () => { setModal(null); karta.resetKarta(); };
 
   const validate = () => {
     if (!form.name.trim()) { toast.warn("Nazwa jest wymagana"); return false; }
@@ -518,13 +577,16 @@ function KlimatyzatoryTab() {
     setSaving(true);
     try {
       const payload = { name: form.name.trim(), priceNetto: +form.priceNetto, isActive: form.isActive };
+      let entityId = modal.id;
       if (modal.mode === "add") {
-        await api.post("/kalkulator/klimatyzatory", payload);
+        const res = await api.post("/kalkulator/klimatyzatory", payload);
+        entityId = res.data?.id;
         toast.success("Klimatyzator dodany");
       } else {
         await api.patch(`/kalkulator/klimatyzatory/${modal.id}`, payload);
         toast.success("Klimatyzator zaktualizowany");
       }
+      if (entityId) await karta.applyKartaAfterSave("klimatyzator", entityId);
       closeModal();
       load();
     } catch (e) {
@@ -561,18 +623,20 @@ function KlimatyzatoryTab() {
               <tr>
                 <th>Nazwa</th>
                 <th>Cena netto (zł)</th>
+                <th>Karta PDF</th>
                 <th>Status</th>
                 <th>Akcje</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={4} className="usk-empty">Brak danych</td></tr>
+                <tr><td colSpan={5} className="usk-empty">Brak danych</td></tr>
               )}
               {items.map((item) => (
                 <tr key={item.id} className={item.isActive ? "" : "usk-row--inactive"}>
                   <td className={item.isActive ? "" : "usk-strikethrough"}>{item.name}</td>
                   <td>{fmt(item.priceNetto)} zł</td>
+                  <KartaKatalogowaTableCell url={item.kartaKatalogowaUrl} />
                   <td><StatusBadge isActive={item.isActive} /></td>
                   <td className="usk-actions">
                     <button type="button" className="usk-btn usk-btn--sm" onClick={() => openEdit(item)}>Edytuj</button>
@@ -597,6 +661,11 @@ function KlimatyzatoryTab() {
               <input className="usk-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="np. Daikin Perfera 3,5 kW" />
               <label className="usk-label">Cena netto (zł) *</label>
               <input className="usk-input" type="number" min="1" step="1" value={form.priceNetto} onChange={(e) => setForm({ ...form, priceNetto: e.target.value })} placeholder="np. 5500" />
+
+              <KartaKatalogowaField
+                {...karta.kartaFieldProps("klimatyzator", modal.mode === "edit" ? modal.id : null, saving)}
+              />
+
               <label className="usk-checkbox-label">
                 <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
                 Aktywny
@@ -632,6 +701,7 @@ function PaneleTab() {
   const [form,    setForm]    = useState(EMPTY_PANEL);
   const [saving,  setSaving]  = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const karta = useKartaKatalogowaInModal();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -647,9 +717,13 @@ function PaneleTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openAdd  = () => { setForm(EMPTY_PANEL); setModal({ mode: "add" }); };
-  const openEdit = (item) => { setForm({ name: item.name, powerW: item.powerW, priceNetto: item.priceNetto, isActive: item.isActive }); setModal({ mode: "edit", id: item.id }); };
-  const closeModal = () => setModal(null);
+  const openAdd  = () => { setForm(EMPTY_PANEL); karta.resetKarta(); setModal({ mode: "add" }); };
+  const openEdit = (item) => {
+    setForm({ name: item.name, powerW: item.powerW, priceNetto: item.priceNetto, isActive: item.isActive });
+    karta.loadKartaFromItem(item);
+    setModal({ mode: "edit", id: item.id });
+  };
+  const closeModal = () => { setModal(null); karta.resetKarta(); };
 
   const validate = () => {
     if (!form.name.trim())                   { toast.warn("Nazwa jest wymagana"); return false; }
@@ -663,13 +737,16 @@ function PaneleTab() {
     setSaving(true);
     try {
       const payload = { name: form.name.trim(), powerW: +form.powerW, priceNetto: +form.priceNetto, isActive: form.isActive };
+      let entityId = modal.id;
       if (modal.mode === "add") {
-        await api.post("/kalkulator/panele", payload);
+        const res = await api.post("/kalkulator/panele", payload);
+        entityId = res.data?.id;
         toast.success("Panel dodany");
       } else {
         await api.patch(`/kalkulator/panele/${modal.id}`, payload);
         toast.success("Panel zaktualizowany");
       }
+      if (entityId) await karta.applyKartaAfterSave("panel", entityId);
       closeModal();
       load();
     } catch (e) {
@@ -707,19 +784,21 @@ function PaneleTab() {
                 <th>Nazwa</th>
                 <th>Moc panelu (W)</th>
                 <th>Cena netto (zł)</th>
+                <th>Karta PDF</th>
                 <th>Status</th>
                 <th>Akcje</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={5} className="usk-empty">Brak danych</td></tr>
+                <tr><td colSpan={6} className="usk-empty">Brak danych</td></tr>
               )}
               {items.map((item) => (
                 <tr key={item.id} className={item.isActive ? "" : "usk-row--inactive"}>
                   <td className={item.isActive ? "" : "usk-strikethrough"}>{item.name}</td>
                   <td>{item.powerW} W</td>
                   <td>{fmt(item.priceNetto)} zł</td>
+                  <KartaKatalogowaTableCell url={item.kartaKatalogowaUrl} />
                   <td><StatusBadge isActive={item.isActive} /></td>
                   <td className="usk-actions">
                     <button className="usk-btn usk-btn--sm" onClick={() => openEdit(item)}>Edytuj</button>
@@ -748,6 +827,10 @@ function PaneleTab() {
 
               <label className="usk-label">Cena netto za sztukę (zł) *</label>
               <input className="usk-input" type="number" min="1" step="1" value={form.priceNetto} onChange={(e) => setForm({ ...form, priceNetto: e.target.value })} placeholder="np. 300" />
+
+              <KartaKatalogowaField
+                {...karta.kartaFieldProps("panel", modal.mode === "edit" ? modal.id : null, saving)}
+              />
 
               <label className="usk-checkbox-label">
                 <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
@@ -785,6 +868,7 @@ function MagazynyTab() {
   const [form,      setForm]      = useState(EMPTY_MAGAZYN);
   const [saving,    setSaving]    = useState(false);
   const [confirm,   setConfirm]   = useState(null);
+  const karta = useKartaKatalogowaInModal();
 
   const loadFalowniki = useCallback(async () => {
     try {
@@ -812,7 +896,7 @@ function MagazynyTab() {
     loadFalowniki();
   }, [load, loadFalowniki]);
 
-  const openAdd = () => { setForm(EMPTY_MAGAZYN); setModal({ mode: "add" }); };
+  const openAdd = () => { setForm(EMPTY_MAGAZYN); karta.resetKarta(); setModal({ mode: "add" }); };
 
   const openEdit = (item) => {
     setForm({
@@ -826,10 +910,11 @@ function MagazynyTab() {
       falownikiIds:  (item.falowniki || []).map((f) => f.id),
       isActive:      item.isActive,
     });
+    karta.loadKartaFromItem(item);
     setModal({ mode: "edit", id: item.id });
   };
 
-  const closeModal = () => setModal(null);
+  const closeModal = () => { setModal(null); karta.resetKarta(); };
 
   const toggleFalownik = (id) => {
     setForm((prev) => ({
@@ -902,13 +987,16 @@ function MagazynyTab() {
         ...(cennikProgowy && { cennikProgowy }),
       };
 
+      let entityId = modal.id;
       if (modal.mode === "add") {
-        await api.post("/kalkulator/magazyny", payload);
+        const res = await api.post("/kalkulator/magazyny", payload);
+        entityId = res.data?.id;
         toast.success("Magazyn dodany");
       } else {
         await api.patch(`/kalkulator/magazyny/${modal.id}`, payload);
         toast.success("Magazyn zaktualizowany");
       }
+      if (entityId) await karta.applyKartaAfterSave("magazyn", entityId);
       closeModal();
       load();
     } catch (e) {
@@ -950,13 +1038,14 @@ function MagazynyTab() {
                 <th>Cennik progowy (zł netto)</th>
                 <th>Kompatybilność</th>
                 <th>Falowniki</th>
+                <th>Karta PDF</th>
                 <th>Status</th>
                 <th>Akcje</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={9} className="usk-empty">Brak danych</td></tr>
+                <tr><td colSpan={10} className="usk-empty">Brak danych</td></tr>
               )}
               {items.map((item) => {
                 const tiers = parseCennikProgowy(item);
@@ -987,6 +1076,7 @@ function MagazynyTab() {
                         }
                       </div>
                     </td>
+                    <KartaKatalogowaTableCell url={item.kartaKatalogowaUrl} />
                     <td><StatusBadge isActive={item.isActive} /></td>
                     <td className="usk-actions">
                       <button className="usk-btn usk-btn--sm" onClick={() => openEdit(item)}>Edytuj</button>
@@ -1083,6 +1173,10 @@ function MagazynyTab() {
                   ))}
                 </div>
               )}
+
+              <KartaKatalogowaField
+                {...karta.kartaFieldProps("magazyn", modal.mode === "edit" ? modal.id : null, saving)}
+              />
 
               <label className="usk-checkbox-label">
                 <input

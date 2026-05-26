@@ -17,6 +17,8 @@ import {
 import { syncKalkulatorCatalogFromApi } from "@/utils/kalkulatorCatalogSync";
 import { computeMontazKwpQuote } from "@/utils/montazKwpSettings";
 import { computeMarzaKoncowa } from "@/utils/marzaKoncowaSettings";
+import { collectSprzetZaproponowany } from "@/utils/sprzetZaproponowany";
+import SprzetZaproponowanyLista from "@/components/kalkulator/SprzetZaproponowanyLista";
 import { computeMagazynLine, formatTierBreakdown, normalizePriceTiers } from "@/utils/magazynPricing";
 import {
   computeFalownikLine,
@@ -1176,7 +1178,13 @@ export default function SunFeeKalkulator() {
           typMontazuId:   panelOption !== "none" ? mountType : null,
           typMontazuName: panelOption !== "none" ? (typyMontazuList.find((t) => t.id === mountType)?.name ?? null) : null,
           panel: panelOption !== "none" && panelSource === "list"
-            ? { id: selectedPanel, nazwa: panelData?.name, mocW: panelData?.powerW, cenaNetto: panelData?.price }
+            ? {
+                id: selectedPanel,
+                nazwa: panelData?.name,
+                mocW: panelData?.powerW,
+                cenaNetto: panelData?.price,
+                kartaKatalogowaUrl: panelData?.kartaKatalogowaUrl ?? null,
+              }
             : null,
           panelWlasny: panelOption !== "none" && panelSource === "custom"
             ? {
@@ -1193,6 +1201,7 @@ export default function SunFeeKalkulator() {
                   cenaNetto: selectedOptymalizator.priceNetto,
                   ilosc: optymalizatorIloscNum,
                   kwotaNetto: parseFloat(optymalizatorKwota.toFixed(2)),
+                  kartaKatalogowaUrl: selectedOptymalizator.kartaKatalogowaUrl ?? null,
                 }
               : {
                   ilosc: optymalizatorIloscNum,
@@ -1214,6 +1223,7 @@ export default function SunFeeKalkulator() {
                 mocKw: falownikLine.totalPowerKw,
                 cenaNetto: falownikLine.totalPrice,
                 cenyPozycji: falownikLine.unitPrices,
+                kartaKatalogowaUrl: falownikData.kartaKatalogowaUrl ?? null,
               }
             : falownikSource === "custom"
               ? {
@@ -1236,6 +1246,7 @@ export default function SunFeeKalkulator() {
               cenyPozycji: magazynLine.unitPrices,
               ilosc: magazynLine.quantity,
               jednostka: "szt.",
+              kartaKatalogowaUrl: magazynData.kartaKatalogowaUrl ?? null,
             }
           : null,
         kosztDodatkowe: {
@@ -1265,6 +1276,7 @@ export default function SunFeeKalkulator() {
                     cenaNetto: k.priceNetto,
                     ilosc: k.qty,
                     kwotaNetto: parseFloat(k.lineTotal.toFixed(2)),
+                    kartaKatalogowaUrl: k.kartaKatalogowaUrl ?? null,
                   }))
                 : [],
             sumaNetto:
@@ -1282,6 +1294,7 @@ export default function SunFeeKalkulator() {
                     cenaNetto: l.priceNetto,
                     ilosc: l.qty,
                     kwotaNetto: parseFloat(l.lineTotal.toFixed(2)),
+                    kartaKatalogowaUrl: l.kartaKatalogowaUrl ?? null,
                   }))
                 : [],
             sumaNetto:
@@ -1299,6 +1312,7 @@ export default function SunFeeKalkulator() {
                     cenaNetto: p.priceNetto,
                     ilosc: p.qty,
                     kwotaNetto: parseFloat(p.lineTotal.toFixed(2)),
+                    kartaKatalogowaUrl: p.kartaKatalogowaUrl ?? null,
                   }))
                 : [],
             sumaNetto:
@@ -1328,6 +1342,8 @@ export default function SunFeeKalkulator() {
           })),
         },
       };
+
+    data.sprzetZaproponowany = collectSprzetZaproponowany(data);
 
     return {
       klientImie: data.klient.imie,
@@ -3432,6 +3448,8 @@ export default function SunFeeKalkulator() {
         {step === 5 && (
           <div className="kalk-section">
             <h2 className="kalk-section-title">Podsumowanie wyceny</h2>
+
+            <SprzetZaproponowanyLista data={buildWycenaPayload().data} />
 
             {/* ── Dane klienta ── */}
             <div className="kalk-divider" style={{ marginTop: 0 }} />

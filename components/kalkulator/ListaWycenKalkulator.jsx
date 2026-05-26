@@ -3,6 +3,7 @@ import { toast } from "react-toastify";
 import api from "@/utils/axiosInstance";
 import { useAuth } from "@/context/AuthContext";
 import { downloadWycenaPdf } from "@/utils/kalkulatorPdfApi";
+import SprzetZaproponowanyLista from "@/components/kalkulator/SprzetZaproponowanyLista";
 
 const fmt = (n) =>
   new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
@@ -185,6 +186,8 @@ function DetailModal({ id, onClose }) {
                   : d?.kosztDodatkowe?.dodatkoweProdukty?.wybor === "nie" ? "NIE" : "—"}
               </td></tr>
             </tbody></table>
+
+            <SprzetZaproponowanyLista data={d} />
 
             <h4 className="lwk-section-hd">Wycena</h4>
             {showAllPrices && w?.pozycje && (
